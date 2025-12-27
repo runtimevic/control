@@ -7,6 +7,7 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, Tr
 use tracing::Level;
 
 use super::handlers::machine_mutation::post_machine_mutate;
+use super::handlers::ethercat_recover::post_ethercat_recover;
 use super::handlers::write_machine_device_identification::post_write_machine_device_identification;
 use crate::app_state::SharedState;
 use crate::socketio::init::init_socketio;
@@ -28,6 +29,7 @@ async fn init_api(app_state: Arc<SharedState>) -> Result<()> {
             post(post_write_machine_device_identification),
         )
         .route("/api/v1/machine/mutate", post(post_machine_mutate))
+        .route("/api/v1/ethercat/recover", post(post_ethercat_recover))
         .nest("/api/v1/metrics", metrics_router())
         .layer(socketio_layer)
         .layer(cors)

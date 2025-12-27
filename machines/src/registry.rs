@@ -18,6 +18,7 @@ use crate::{
 };
 
 use crate::test_machine::TestMachine;
+use crate::test_el2008_machine::TestEL2008Machine;
 
 use lazy_static::lazy_static;
 
@@ -124,6 +125,7 @@ lazy_static! {
         mc.register::<TestMachine>(TestMachine::MACHINE_IDENTIFICATION);
         mc.register::<IP20TestMachine>(IP20TestMachine::MACHINE_IDENTIFICATION);
         mc.register::<AnalogInputTestMachine>(AnalogInputTestMachine::MACHINE_IDENTIFICATION);
+        mc.register::<TestEL2008Machine>(TestEL2008Machine::MACHINE_IDENTIFICATION);
 
         mc
     };

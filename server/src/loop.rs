@@ -1,9 +1,6 @@
 use crate::app_state::{EthercatSetup, HotThreadMessage};
 use crate::performance_metrics::EthercatPerformanceMetrics;
 use bitvec::prelude::*;
-use control_core::realtime::set_core_affinity;
-#[cfg(not(feature = "development-build"))]
-use control_core::realtime::set_realtime_priority;
 use machines::Machine;
 use machines::machine_identification::write_machine_device_identification;
 use smol::channel::Receiver;
@@ -12,13 +9,16 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::metrics::jitter::record_machines_loop_jitter;
-use crate::metrics::preemption::set_rt_loop_tid;
 pub struct RtLoopInputs<'a> {
     pub machines: &'a mut Vec<Box<dyn Machine>>,
     pub ethercat_setup: Option<Box<EthercatSetup>>,
     pub ethercat_perf_metrics: Option<&'a mut EthercatPerformanceMetrics>,
     pub sleeper: SpinSleeper,
     pub cycle_target: Duration,
+    // Auto-recover watchdog
+    pub consecutive_txrx_failures: u32,
+    pub last_recover_attempt: Option<Instant>,
+    pub recover_cooldown: Duration,
 }
 
 // 300 us loop cycle target
@@ -33,41 +33,8 @@ pub fn start_loop_thread(
         .spawn(move || {
             let rt_receiver = rt_receiver.to_owned();
             let sleeper =
-                SpinSleeper::new(3_333_333) // frequency in Hz ~ 1 / 300µs, Basically specifies the accuracy of our sleep
+                SpinSleeper::new(3_333_333)
                     .with_spin_strategy(spin_sleep::SpinStrategy::YieldThread);
-
-            let _ = set_core_affinity(2);
-
-            // Get thread ID in a platform-specific way
-            #[cfg(target_os = "linux")]
-            let tid = unsafe { libc::syscall(libc::SYS_gettid) as libc::pid_t };
-            #[cfg(target_os = "macos")]
-            let tid = {
-                let mut thread_id_raw: u64 = 0;
-                unsafe { libc::pthread_threadid_np(libc::pthread_self(), &mut thread_id_raw) };
-                thread_id_raw as libc::pid_t
-            };
-            #[cfg(target_os = "windows")]
-            let tid = unsafe { libc::GetCurrentThreadId() as libc::pid_t };
-            #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-            let tid = 0 as libc::pid_t; // Fallback for unsupported platforms
-
-            set_rt_loop_tid(tid);
-
-            #[cfg(not(feature = "development-build"))]
-            if let Err(e) = set_realtime_priority() {
-                tracing::error!(
-                    "[{}::init_loop] Failed to set thread to real-time priority \n{:?}",
-                    module_path!(),
-                    e
-                );
-            } else {
-                tracing::info!(
-                    "[{}::init_loop] Real-time priority set successfully for current thread",
-                    module_path!()
-                );
-            }
-
             let mut ethercat_perf = EthercatPerformanceMetrics::new();
             let mut machines: Vec<Box<dyn Machine>> = vec![];
             let mut last_iter_start: Option<Instant> = None;
@@ -77,6 +44,9 @@ pub fn start_loop_thread(
                 sleeper,
                 cycle_target,
                 ethercat_perf_metrics: Some(&mut ethercat_perf),
+                consecutive_txrx_failures: 0,
+                last_recover_attempt: None,
+                recover_cooldown: Duration::from_secs(3),
             };
 
             loop {
@@ -110,6 +80,9 @@ pub fn start_loop_thread(
                                     tracing::info!("Successfully wrote machine device identification to EEPROM");
                                 }
                             }
+
+                            // Recreate machines after assignment is handled by REST flow.
+                            // No action in the RT loop.
                         }
                     }
                     HotThreadMessage::DeleteMachine(unique_id) => {
@@ -165,57 +138,66 @@ pub fn start_loop_thread(
 
 pub async fn copy_ethercat_inputs(
     ethercat_setup: Option<&EthercatSetup>,
-) -> Result<(), anyhow::Error> {
+) -> Result<bool, anyhow::Error> {
     // only if we have an ethercat setup
     // - tx/rx cycle
     // - copy inputs to devices
     if let Some(ethercat_setup) = ethercat_setup {
-        ethercat_setup
+        match ethercat_setup
             .group
             .tx_rx(&ethercat_setup.maindevice)
-            .await?;
-
-        // copy inputs to devices
-        for (i, subdevice) in ethercat_setup
-            .group
-            .iter(&ethercat_setup.maindevice)
-            .enumerate()
+            .await
         {
-            // retrieve inputs
-            let input = subdevice.inputs_raw();
-            let input_bits = input.view_bits::<Lsb0>();
+            Ok(_) => {
+                // copy inputs to devices
+                for (i, subdevice) in ethercat_setup
+                    .group
+                    .iter(&ethercat_setup.maindevice)
+                    .enumerate()
+                {
+                    // retrieve inputs
+                    let input = subdevice.inputs_raw();
+                    let input_bits = input.view_bits::<Lsb0>();
 
-            // get device
-            let mut device = ethercat_setup.devices[i].1.as_ref().write().await;
+                    // get device
+                    let mut device = ethercat_setup.devices[i].1.as_ref().write().await;
 
-            // check if the device is used
-            if !device.is_used() {
-                // if the device is not used, we skip it
-                continue;
+                    // check if the device is used
+                    if !device.is_used() {
+                        // if the device is not used, we skip it
+                        continue;
+                    }
+
+                    // put inputs into device
+                    device.input_checked(input_bits).map_err(|e| {
+                        anyhow::anyhow!(
+                            "[{}::loop_once] SubDevice with index {} failed to copy inputs\n{:?}",
+                            module_path!(),
+                            i,
+                            e
+                        )
+                    })?;
+
+                    // post process inputs
+                    device.input_post_process().map_err(|e| {
+                        anyhow::anyhow!(
+                            "[{}::loop_once] SubDevice with index {} failed to copy post_process\n{:?}",
+                            module_path!(),
+                            i,
+                            e
+                        )
+                    })?;
+                }
+                return Ok(true);
             }
-
-            // put inputs into device
-            device.input_checked(input_bits).map_err(|e| {
-                anyhow::anyhow!(
-                    "[{}::loop_once] SubDevice with index {} failed to copy inputs\n{:?}",
-                    module_path!(),
-                    i,
-                    e
-                )
-            })?;
-
-            // post process inputs
-            device.input_post_process().map_err(|e| {
-                anyhow::anyhow!(
-                    "[{}::loop_once] SubDevice with index {} failed to copy post_process\n{:?}",
-                    module_path!(),
-                    i,
-                    e
-                )
-            })?;
+            Err(e) => {
+                // If tx_rx fails (e.g., timeout due to network disconnection), log and skip this cycle
+                tracing::warn!("EtherCAT tx_rx failed: {}. Skipping input copy.", e);
+                return Ok(false);
+            }
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 pub async fn copy_ethercat_outputs(
@@ -283,14 +265,32 @@ pub fn loop_once<'maindevice>(inputs: &mut RtLoopInputs<'_>) -> Result<(), anyho
 
         let res = smol::block_on(copy_ethercat_inputs(inputs.ethercat_setup.as_deref()));
         match res {
-            Ok(_) => (),
+            Ok(success) => {
+                if success {
+                    inputs.consecutive_txrx_failures = 0;
+                } else {
+                    inputs.consecutive_txrx_failures = inputs.consecutive_txrx_failures.saturating_add(1);
+                }
+            }
             Err(e) => {
                 return Err(anyhow::anyhow!("copy_ethercat_inputs failed: {:?}", e));
             }
         };
+
+        // Auto-restart on persistent EtherCAT failures
+        if inputs.consecutive_txrx_failures >= 20 {
+            tracing::error!(
+                "EtherCAT connection lost after {} consecutive failures. Restarting server...",
+                inputs.consecutive_txrx_failures
+            );
+            // Exit with code 2 to signal EtherCAT connection loss
+            // systemd or the startup script will automatically restart the server
+            std::process::exit(2);
+        }
     }
 
     execute_machines(&mut inputs.machines);
+
 
     if inputs.ethercat_setup.is_some() && inputs.ethercat_perf_metrics.is_some() {
         let res = smol::block_on(copy_ethercat_outputs(inputs.ethercat_setup.as_deref()));
@@ -318,4 +318,63 @@ pub fn loop_once<'maindevice>(inputs: &mut RtLoopInputs<'_>) -> Result<(), anyho
     }
 
     Ok(())
+}
+
+fn attempt_ethercat_recover(inputs: &mut RtLoopInputs<'_>) {
+    let now = Instant::now();
+    if let Some(last) = inputs.last_recover_attempt {
+        if now.duration_since(last) < inputs.recover_cooldown {
+            return;
+        }
+    }
+
+    inputs.last_recover_attempt = Some(now);
+    tracing::info!("Attempting EtherCAT auto-recovery...");
+    // Best-effort local POST to recovery endpoint without blocking too long
+    let result = smol::block_on(async {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+        use std::time::Duration as StdDuration;
+
+        match TcpStream::connect("127.0.0.1:3001") {
+            Ok(mut stream) => {
+                let _ = stream.set_read_timeout(Some(StdDuration::from_secs(1)));
+                let _ = stream.set_write_timeout(Some(StdDuration::from_secs(1)));
+                let req = "POST /api/v1/ethercat/recover HTTP/1.1\r\nHost: 127.0.0.1:3001\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                if let Err(e) = stream.write_all(req.as_bytes()) {
+                    tracing::error!("Auto-recover write failed: {}", e);
+                    return false;
+                }
+                let mut buf = [0u8; 256];
+                match stream.read(&mut buf) {
+                    Ok(n) if n > 0 => {
+                        let resp = String::from_utf8_lossy(&buf[..n]);
+                        if resp.starts_with("HTTP/1.1 200") || resp.starts_with("HTTP/1.1 2") {
+                            tracing::info!("Auto-recover: recover endpoint responded OK");
+                            return true;
+                        }
+                        tracing::warn!("Auto-recover: non-200 response: {}", resp);
+                        false
+                    }
+                    Ok(_) => {
+                        tracing::warn!("Auto-recover: empty response from recover endpoint");
+                        false
+                    }
+                    Err(e) => {
+                        tracing::error!("Auto-recover read failed: {}", e);
+                        false
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("Auto-recover connect failed: {}", e);
+                false
+            }
+        }
+    });
+
+    if result {
+        // Reset failure counter to allow setup to stabilize
+        inputs.consecutive_txrx_failures = 0;
+    }
 }

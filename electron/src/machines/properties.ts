@@ -468,6 +468,51 @@ export const testmachine: MachineProperties = {
   ],
 };
 
+export const testEL2008Machine: MachineProperties = {
+  name: "TestEL2008",
+  version: "V1",
+  slug: "testel2008machine",
+  icon: "lu:Disc3",
+  machine_identification: {
+    vendor: VENDOR_QITECH,
+    machine: 0x0036,
+  },
+  device_roles: [
+    {
+      role: 0,
+      role_label: "Bus Coupler",
+      allowed_devices: [
+        {
+          vendor_id: 2,
+          product_id: 0x44c2c52,
+          revision: 0x120000,
+        },
+      ],
+    },
+    {
+      role: 1,
+      role_label: "EL2008",
+      allowed_devices: [
+        {
+          vendor_id: 2,
+          product_id: 0x7d83052,
+          revision: 0x00110000,
+        },
+        {
+          vendor_id: 2,
+          product_id: 0x7d83052,
+          revision: 0x120000,
+        },
+        {
+          vendor_id: 2,
+          product_id: 0x7d83052,
+          revision: 0x100000,
+        },
+      ],
+    },
+  ],
+};
+
 export const analogInputTestMachine: MachineProperties = {
   name: "AnalogTest",
   version: "V1",
@@ -536,6 +581,7 @@ export const machineProperties: MachineProperties[] = [
   buffer1,
   aquapath1,
   testmachine,
+  testEL2008Machine,
   analogInputTestMachine,
   ip20TestMachine,
 ];

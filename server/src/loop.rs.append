@@ -1,0 +1,58 @@
+
+fn attempt_ethercat_recover(inputs: &mut RtLoopInputs<'_>) {
+    let now = Instant::now();
+    if let Some(last) = inputs.last_recover_attempt {
+        if now.duration_since(last) < inputs.recover_cooldown {
+            return;
+        }
+    }
+
+    inputs.last_recover_attempt = Some(now);
+    // Best-effort local POST to recovery endpoint without blocking too long
+    let result = smol::block_on(async {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+        use std::time::Duration as StdDuration;
+
+        match TcpStream::connect("127.0.0.1:3001") {
+            Ok(mut stream) => {
+                let _ = stream.set_read_timeout(Some(StdDuration::from_secs(1)));
+                let _ = stream.set_write_timeout(Some(StdDuration::from_secs(1)));
+                let req = "POST /api/v1/ethercat/recover HTTP/1.1\r\nHost: 127.0.0.1:3001\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                if let Err(e) = stream.write_all(req.as_bytes()) {
+                    tracing::error!("Auto-recover write failed: {}", e);
+                    return false;
+                }
+                let mut buf = [0u8; 256];
+                match stream.read(&mut buf) {
+                    Ok(n) if n > 0 => {
+                        let resp = String::from_utf8_lossy(&buf[..n]);
+                        if resp.starts_with("HTTP/1.1 200") || resp.starts_with("HTTP/1.1 2") {
+                            tracing::info!("Auto-recover: recover endpoint responded OK");
+                            return true;
+                        }
+                        tracing::warn!("Auto-recover: non-200 response: {}", resp);
+                        false
+                    }
+                    Ok(_) => {
+                        tracing::warn!("Auto-recover: empty response from recover endpoint");
+                        false
+                    }
+                    Err(e) => {
+                        tracing::error!("Auto-recover read failed: {}", e);
+                        false
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("Auto-recover connect failed: {}", e);
+                false
+            }
+        }
+    });
+
+    if result {
+        // Reset failure counter to allow setup to stabilize
+        inputs.consecutive_txrx_failures = 0;
+    }
+}

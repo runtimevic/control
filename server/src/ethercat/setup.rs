@@ -214,6 +214,7 @@ pub async fn setup_loop(
                 let _ = tx_rx_task_io_uring(&interface, tx, rx)
                     .expect("Failed to spawn TX/RX task (io_uring)");
             }
+            tracing::info!("EthercatTxRxThread exiting");
         })
         .expect("Building thread");
 
