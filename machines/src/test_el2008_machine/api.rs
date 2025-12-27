@@ -1,4 +1,4 @@
-use super::TestEL2008Machine;
+use super::{MachineState, TestEL2008Machine, TestEL2008Mode};
 use crate::{MachineApi, MachineMessage};
 use control_core::socketio::{
     event::{Event, GenericEvent},
@@ -13,6 +13,9 @@ use std::sync::Arc;
 #[derive(Serialize, Debug, Clone)]
 pub struct StateEvent {
     pub led_on: [bool; 8],
+    pub mode: TestEL2008Mode,
+    pub machine_state: MachineState,
+    pub automatic_delay_ms: u64,
 }
 
 impl StateEvent {
@@ -30,6 +33,11 @@ pub enum TestEL2008MachineEvents {
 pub enum Mutation {
     SetLed { index: usize, on: bool },
     SetAllLeds { on: bool },
+    SetMode { mode: TestEL2008Mode },
+    Start,
+    Stop,
+    Reset,
+    SetAutomaticDelay { delay_ms: u64 },
 }
 
 #[derive(Debug, Clone)]
@@ -67,13 +75,30 @@ impl MachineApi for TestEL2008Machine {
     fn api_mutate(&mut self, request_body: Value) -> Result<(), anyhow::Error> {
         let mutation: Mutation = serde_json::from_value(request_body)?;
         match mutation {
-            Mutation::SetLed { index, on } => self.set_led(index, on),
-            Mutation::SetAllLeds { on } => self.set_all_leds(on),
+            Mutation::SetLed { index, on } => {
+                self.set_led(index, on);
+            }
+            Mutation::SetAllLeds { on } => {
+                self.set_all_leds(on);
+            }
+            Mutation::SetMode { mode } => {
+                self.set_mode(mode);
+            }
+            Mutation::Start => {
+                self.start();
+            }
+            Mutation::Stop => {
+                self.stop();
+            }
+            Mutation::Reset => {
+                self.reset();
+            }
+            Mutation::SetAutomaticDelay { delay_ms } => {
+                self.set_automatic_delay(delay_ms);
+            }
         }
 
-        for (led, &on) in self.douts.iter().zip(self.led_on.iter()) {
-            led.set(on);
-        }
+        self.apply_outputs();
 
         Ok(())
     }

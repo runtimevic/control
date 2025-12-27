@@ -1,5 +1,6 @@
 use crate::test_el2008_machine::TestEL2008Machine;
 use crate::test_el2008_machine::api::TestEL2008MachineNamespace;
+use crate::test_el2008_machine::{AutomaticPhase, MachineState, TestEL2008Mode};
 use smol::block_on;
 use std::time::Instant;
 
@@ -62,6 +63,11 @@ impl MachineNewTrait for TestEL2008Machine {
                 led_on: [false; 8],
                 main_sender: params.main_thread_channel.clone(),
                 douts: [do1, do2, do3, do4, do5, do6, do7, do8],
+                mode: TestEL2008Mode::Manual,
+                machine_state: MachineState::Stopped,
+                automatic_phase: AutomaticPhase::Idle,
+                automatic_delay_ms: 500, // Default 500ms delay
+                last_automatic_step: Instant::now(),
             };
             my_test.emit_state();
             Ok(my_test)

@@ -87,9 +87,80 @@ export function useTestEL2008Machine() {
     );
   };
 
+  const setMode = (mode: "Manual" | "Home" | "Automatic") => {
+    updateStateOptimistically(
+      (current) => {
+        current.mode = mode;
+      },
+      () =>
+        sendMutation({
+          machine_identification_unique: machineIdentification,
+          data: { action: "SetMode", value: { mode } },
+        }),
+    );
+  };
+
+  const start = () => {
+    updateStateOptimistically(
+      (current) => {
+        current.machine_state = "Running";
+      },
+      () =>
+        sendMutation({
+          machine_identification_unique: machineIdentification,
+          data: { action: "Start", value: null },
+        }),
+    );
+  };
+
+  const stop = () => {
+    updateStateOptimistically(
+      (current) => {
+        current.machine_state = "Stopped";
+      },
+      () =>
+        sendMutation({
+          machine_identification_unique: machineIdentification,
+          data: { action: "Stop", value: null },
+        }),
+    );
+  };
+
+  const reset = () => {
+    updateStateOptimistically(
+      (current) => {
+        current.machine_state = "Stopped";
+        current.led_on = [false, false, false, false, false, false, false, false];
+      },
+      () =>
+        sendMutation({
+          machine_identification_unique: machineIdentification,
+          data: { action: "Reset", value: null },
+        }),
+    );
+  };
+
+  const setAutomaticDelay = (delay_ms: number) => {
+    updateStateOptimistically(
+      (current) => {
+        current.automatic_delay_ms = delay_ms;
+      },
+      () =>
+        sendMutation({
+          machine_identification_unique: machineIdentification,
+          data: { action: "SetAutomaticDelay", value: { delay_ms } },
+        }),
+    );
+  };
+
   return {
     state: stateOptimistic.value,
     setLed,
     setAllLeds,
+    setMode,
+    start,
+    stop,
+    reset,
+    setAutomaticDelay,
   };
 }

@@ -16,6 +16,9 @@ import { MachineIdentificationUnique } from "@/machines/types";
 
 export const stateEventDataSchema = z.object({
   led_on: z.array(z.boolean()).length(8),
+  mode: z.enum(["Manual", "Home", "Automatic"]),
+  machine_state: z.enum(["Stopped", "Running"]),
+  automatic_delay_ms: z.number(),
 });
 
 export const stateEventSchema = eventSchema(stateEventDataSchema);

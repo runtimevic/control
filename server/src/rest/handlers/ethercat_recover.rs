@@ -2,9 +2,7 @@ use axum::{extract::State, http::Response};
 use std::sync::Arc;
 
 use crate::{
-    app_state::{HotThreadMessage, SharedState},
-    ethercat::setup::setup_loop,
-    metrics::io::get_ethercat_iface,
+    app_state::SharedState,
     rest::util::ResponseUtil,
 };
 

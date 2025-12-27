@@ -9,8 +9,7 @@ cargo_run_linux.sh → ejecución manual, termina cuando el servidor sale
 cargo_run_linux_auto_restart.sh → ejecución con reinicio automático
 ```
 ### Ejecutar el frontend Electron:
-- ~/Descargas/control/electron$ npm start
-
+- cd /home/runtimevic/Descargas/control/electron && npm start
 ***
 ![](./docs/assets/github-banner.png)
 
