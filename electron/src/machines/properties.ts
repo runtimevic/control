@@ -458,6 +458,11 @@ export const testmachine: MachineProperties = {
           product_id: 0x7d43052,
           revision: 0x120000,
         },
+        {
+          vendor_id: 2,
+          product_id: 0x7d43052,
+          revision: 0x110000,
+        },
       ],
     },
   ],

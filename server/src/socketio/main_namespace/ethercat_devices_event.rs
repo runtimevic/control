@@ -1,7 +1,6 @@
 use crate::app_state::{EtherCatDeviceMetaData, SharedState};
 use control_core::socketio::event::Event;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EthercatSetupDone {
@@ -20,7 +19,7 @@ pub struct EthercatDevicesEventBuilder();
 impl EthercatDevicesEventBuilder {
     const NAME: &'static str = "EthercatDevicesEvent";
 
-    pub async fn build(&self, app_state: Arc<SharedState>) -> Event<EthercatDevicesEvent> {
+    pub async fn build(&self, app_state: &SharedState) -> Event<EthercatDevicesEvent> {
         Event::new(
             Self::NAME,
             EthercatDevicesEvent::Done(EthercatSetupDone {

@@ -104,6 +104,11 @@ pub fn start_loop_thread(
                                     &ethercat_setup.maindevice,
                                     &info_request.device_machine_identification,
                                 ));
+                                if let Err(e) = _res {
+                                    tracing::error!("Failed to write machine device identification to EEPROM: {}", e);
+                                } else {
+                                    tracing::info!("Successfully wrote machine device identification to EEPROM");
+                                }
                             }
                         }
                     }

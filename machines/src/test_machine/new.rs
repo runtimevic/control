@@ -9,7 +9,7 @@ use crate::{
 };
 
 use anyhow::Error;
-use ethercat_hal::devices::el2004::{EL2004, EL2004_IDENTITY_A, EL2004Port};
+use ethercat_hal::devices::el2004::{EL2004, EL2004_IDENTITY_A, EL2004_IDENTITY_B, EL2004Port};
 use ethercat_hal::io::digital_output::DigitalOutput;
 
 //Imports For Wago
@@ -70,10 +70,14 @@ impl MachineNewTrait for TestMachine {
             drop(coupler);
             */
 
-            let el2004 =
-                get_ethercat_device::<EL2004>(hardware, params, 1, [EL2004_IDENTITY_A].to_vec())
-                    .await?
-                    .0;
+            let el2004 = get_ethercat_device::<EL2004>(
+                hardware,
+                params,
+                1,
+                [EL2004_IDENTITY_A, EL2004_IDENTITY_B].to_vec(),
+            )
+            .await?
+            .0;
             let do1 = DigitalOutput::new(el2004.clone(), EL2004Port::DO1);
             let do2 = DigitalOutput::new(el2004.clone(), EL2004Port::DO2);
             let do3 = DigitalOutput::new(el2004.clone(), EL2004Port::DO3);

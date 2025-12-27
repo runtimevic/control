@@ -1,6 +1,7 @@
 use crate::ethercat::config::{MAX_SUBDEVICES, PDI_LEN};
 use crate::rest::handlers::write_machine_device_identification::MachineDeviceInfoRequest;
 use crate::socketio::main_namespace::MainNamespaceEvents;
+use crate::socketio::main_namespace::ethercat_devices_event::EthercatDevicesEventBuilder;
 use crate::socketio::main_namespace::machines_event::{MachineObj, MachinesEventBuilder};
 use crate::socketio::namespaces::Namespaces;
 use control_core::socketio::event::GenericEvent;
@@ -126,6 +127,12 @@ impl SharedState {
         let event = MachinesEventBuilder().build(self.current_machines_meta.lock().await.clone());
         let main_namespace = &mut self.socketio_setup.namespaces.write().await.main_namespace;
         main_namespace.emit(MainNamespaceEvents::MachinesEvent(event));
+    }
+
+    pub async fn send_ethercat_devices_event(&self) {
+        let event = EthercatDevicesEventBuilder().build(self).await;
+        let main_namespace = &mut self.socketio_setup.namespaces.write().await.main_namespace;
+        main_namespace.emit(MainNamespaceEvents::EthercatDevicesEvent(event));
     }
 
     /// Removes a machine by its unique identifier
