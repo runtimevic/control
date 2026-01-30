@@ -30,6 +30,7 @@ pub mod serial;
 pub mod test_machine;
 pub mod test_el2008_machine;
 pub mod winder2;
+pub mod servo_test_machine;
 
 pub const VENDOR_QITECH: u16 = 0x0001;
 pub const MACHINE_WINDER_V1: u16 = 0x0002;
@@ -44,6 +45,7 @@ pub const TEST_MACHINE: u16 = 0x0033;
 pub const IP20_TEST_MACHINE: u16 = 0x0034;
 pub const ANALOG_INPUT_TEST_MACHINE: u16 = 0x0035;
 pub const TEST_EL2008_MACHINE: u16 = 0x0036;
+pub const SERVO_TEST_MACHINE: u16 = 0x0037;
 
 use serde_json::Value;
 use smol::lock::RwLock;

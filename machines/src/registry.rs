@@ -7,6 +7,7 @@ use crate::{
 use crate::{
     Machine, MachineNewParams, analog_input_test_machine::AnalogInputTestMachine,
     ip20_test_machine::IP20TestMachine, machine_identification::MachineIdentification,
+    servo_test_machine::ServoTestMachine,
 };
 
 #[cfg(not(feature = "mock-machine"))]
@@ -19,6 +20,14 @@ use crate::{
 
 use crate::test_machine::TestMachine;
 use crate::test_el2008_machine::TestEL2008Machine;
+
+// Import servo devices for type aliases
+use ethercat_hal::devices::lichuan::lc10e::LichuanLC10E;
+use ethercat_hal::devices::mitsubishi::mr_j4_tm::MitsubishiMRJ4TM;
+
+// Type aliases for specific servo machines
+type ServoTestMachineLichuan = ServoTestMachine<LichuanLC10E>;
+type ServoTestMachineMitsubishi = ServoTestMachine<MitsubishiMRJ4TM>;
 
 use lazy_static::lazy_static;
 
@@ -126,6 +135,8 @@ lazy_static! {
         mc.register::<IP20TestMachine>(IP20TestMachine::MACHINE_IDENTIFICATION);
         mc.register::<AnalogInputTestMachine>(AnalogInputTestMachine::MACHINE_IDENTIFICATION);
         mc.register::<TestEL2008Machine>(TestEL2008Machine::MACHINE_IDENTIFICATION);
+        mc.register::<ServoTestMachineLichuan>(ServoTestMachineLichuan::MACHINE_IDENTIFICATION);
+        mc.register::<ServoTestMachineMitsubishi>(ServoTestMachineMitsubishi::MACHINE_IDENTIFICATION);
 
         mc
     };

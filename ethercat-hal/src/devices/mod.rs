@@ -23,6 +23,16 @@ pub mod el7041_0052;
 pub mod wago_750_354;
 pub mod wago_modules;
 
+// NUEVO: Integración con rust-ethercat-devices
+pub mod adapters;
+pub mod lichuan;
+pub mod smc_mitsubishi;
+
+// Re-exports
+pub use lichuan::{LichuanSimulator, LichuanHardware, is_lichuan_lc10e};
+pub use smc_mitsubishi::{SmcMitsubishiSimulator, SmcMitsubishiHardware, is_smc_mitsubishi};
+pub use adapters::{ServoAdapter, ServoDevice};
+
 use super::devices::el1008::EL1008;
 use crate::{
     devices::{el2521::EL2521, el4002::EL4002},
