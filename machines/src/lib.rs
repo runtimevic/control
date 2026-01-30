@@ -195,13 +195,24 @@ pub fn validate_no_role_dublicates(
 ) -> Result<(), Error> {
     let mut roles = vec![];
     for device in identified_device_group.iter() {
-        if roles.contains(&device.device_machine_identification.role) {
+        let role = device.device_machine_identification.role;
+        if roles.contains(&role) {
+            // Find which devices have the duplicate role
+            let duplicate_devices: Vec<_> = identified_device_group
+                .iter()
+                .filter(|d| d.device_machine_identification.role == role)
+                .map(|d| format!("index={:?}", d.device_hardware_identification))
+                .collect();
+            
             return Err(anyhow::anyhow!(
-                "[{}::validate_no_role_dublicates] Role dublicate",
+                "[{}::validate_no_role_dublicates] Duplicate role {} found in {} devices: [{}]. Each device must have a unique role.",
                 module_path!(),
+                role,
+                duplicate_devices.len(),
+                duplicate_devices.join(", ")
             ));
         }
-        roles.push(device.device_machine_identification.role);
+        roles.push(role);
     }
     Ok(())
 }

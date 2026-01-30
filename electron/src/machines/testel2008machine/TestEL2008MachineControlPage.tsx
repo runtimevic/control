@@ -61,7 +61,7 @@ export function TestEL2008MachineControlPage() {
                 },
                 Home: {
                   children: "Home",
-                  icon: "lu:Home",
+                  icon: "lu:House",
                   isActiveClassName: "bg-yellow-600",
                   disabled: !isStopped,
                 },

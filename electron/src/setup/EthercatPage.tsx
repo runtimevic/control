@@ -111,11 +111,14 @@ export const columns: ColumnDef<
   {
     accessorKey: "eeprom",
     header: "Edit Assignment",
-    cell: (row) => (
-      <>
-        <DeviceEepromDialog device={row.row.original} />
-      </>
-    ),
+    cell: (context) => {
+      const allDevices = context.table.options.data;
+      return (
+        <>
+          <DeviceEepromDialog device={context.row.original} allDevices={allDevices} />
+        </>
+      );
+    },
   },
 ];
 

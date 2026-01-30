@@ -1,7 +1,17 @@
-### Ejecutar con autorestart
+### Ejecutar con autorestart 
 - cd /home/runtimevic/Descargas/control
 ./cargo_run_linux_auto_restart.sh
+### ejecutar backend en modo con hardware real:
+- **Recomendado**: `./cargo_run_linux.sh` (compila y asigna permisos automáticamente)
+- **Manual**: `cargo build && sudo setcap 'cap_dac_override,cap_net_raw,cap_sys_nice,cap_ipc_lock=eip' ./target/debug/server && RUST_LOG=info ./target/debug/server`
+- **Nota**: `cargo run` recompila y pierde los permisos de red - usa los scripts o ejecuta setcap después de compilar
 
+### ejecutar backend en modo mock-machine :
+- cargo run --bin server --features mock-machine,development-build
+***
+### actualizar ethercat-devices :
+- cargo update -p ethercat-devices
+***
 ```
 Resumen:
 

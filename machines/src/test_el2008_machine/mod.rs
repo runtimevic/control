@@ -2,15 +2,50 @@ use crate::machine_identification::{MachineIdentification, MachineIdentification
 use crate::test_el2008_machine::api::{StateEvent, TestEL2008MachineEvents};
 use crate::{AsyncThreadMessage, Machine, MachineMessage};
 use control_core::socketio::namespace::NamespaceCacheingLogic;
-use ethercat_hal::io::digital_output::DigitalOutput;
+use ethercat_hal::io::digital_output::{DigitalOutput, DigitalOutputDevice, DigitalOutputOutput};
 use serde::{Deserialize, Serialize};
 use smol::channel::{Receiver, Sender};
+use std::sync::Arc;
+use smol::lock::RwLock;
 use std::time::{Duration, Instant};
 pub mod act;
 pub mod api;
 pub mod new;
 use crate::test_el2008_machine::api::TestEL2008MachineNamespace;
 use crate::{TEST_EL2008_MACHINE, VENDOR_QITECH};
+
+/// Mock device for digital outputs (used for testing without hardware)
+#[derive(Debug, Clone, Copy)]
+struct MockDigitalOutputPort(usize);
+
+struct MockDigitalOutputDevice {
+    outputs: [bool; 8],
+}
+
+impl MockDigitalOutputDevice {
+    fn new() -> Self {
+        Self {
+            outputs: [false; 8],
+        }
+    }
+}
+
+impl DigitalOutputDevice<MockDigitalOutputPort> for MockDigitalOutputDevice {
+    fn set_output(&mut self, port: MockDigitalOutputPort, value: DigitalOutputOutput) {
+        let on: bool = value.into();
+        if port.0 < self.outputs.len() {
+            self.outputs[port.0] = on;
+        }
+    }
+
+    fn get_output(&self, port: MockDigitalOutputPort) -> DigitalOutputOutput {
+        if port.0 < self.outputs.len() {
+            self.outputs[port.0].into()
+        } else {
+            false.into()
+        }
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub enum TestEL2008Mode {
@@ -67,8 +102,45 @@ impl TestEL2008Machine {
         vendor: VENDOR_QITECH,
         machine: TEST_EL2008_MACHINE,
     };
-}
 
+    /// Create a TestEL2008Machine without actual hardware (for testing/mocking)
+    pub fn new_without_hardware(
+        machine_identification_unique: MachineIdentificationUnique,
+        main_sender: Option<Sender<AsyncThreadMessage>>,
+    ) -> Result<Self, anyhow::Error> {
+        // Create mock digital output device
+        let mock_device = Arc::new(RwLock::new(MockDigitalOutputDevice::new()));
+        
+        // Create 8 digital outputs using the mock device
+        let douts = std::array::from_fn(|i| {
+            DigitalOutput::new(mock_device.clone(), MockDigitalOutputPort(i))
+        });
+
+        let (sender, receiver) = smol::channel::unbounded();
+        let namespace = TestEL2008MachineNamespace {
+            namespace: None,  // No socket.io in mock mode
+        };
+        
+        let mut machine = Self {
+            api_receiver: receiver,
+            api_sender: sender,
+            machine_identification_unique,
+            namespace,
+            last_state_emit: Instant::now(),
+            led_on: [false; 8],
+            main_sender,
+            douts,
+            mode: TestEL2008Mode::Manual,
+            machine_state: MachineState::Stopped,
+            automatic_phase: AutomaticPhase::Idle,
+            automatic_delay_ms: 500,
+            last_automatic_step: Instant::now(),
+        };
+        
+        machine.emit_state();
+        Ok(machine)
+    }
+}
 impl TestEL2008Machine {
     pub fn emit_state(&mut self) {
         let event = StateEvent {

@@ -11,6 +11,9 @@ import {
 // Set consistent app ID for Windows taskbar and GNOME dock integration
 app.setAppUserModelId("de.qitech.control-electron");
 
+// Disable hardware acceleration to avoid EGL errors on some Linux systems
+app.disableHardwareAcceleration();
+
 // Ensure single instance
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {

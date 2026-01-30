@@ -148,6 +148,14 @@ impl ServoDevice for LichuanSimulator {
         Ok(0) // Lichuan no tiene método get_error_code directo
     }
     
+    fn set_profile_velocity(&mut self, velocity: u32) -> Result<()> {
+        self.0.set_profile_velocity(velocity).map_err(|e| anyhow::anyhow!("{}", e))
+    }
+    
+    fn get_profile_velocity(&self) -> Result<u32> {
+        self.0.get_profile_velocity().map_err(|e| anyhow::anyhow!("{}", e))
+    }
+    
     fn update(&mut self, delta_ms: u64) -> Result<()> {
         self.0.update(delta_ms).map_err(|e| anyhow::anyhow!("{}", e))
     }
@@ -209,6 +217,16 @@ impl ServoDevice for LichuanHardware {
     
     fn get_error_code(&self) -> Result<u16> {
         Ok(0)
+    }
+    
+    fn set_profile_velocity(&mut self, _velocity: u32) -> Result<()> {
+        // Hardware: se configurar\u00eda v\u00eda CoE SDO 0x6081
+        Ok(())
+    }
+    
+    fn get_profile_velocity(&self) -> Result<u32> {
+        // Hardware: se leer\u00eda v\u00eda CoE SDO 0x6081
+        Ok(3000) // Valor por defecto
     }
     
     fn update(&mut self, _delta_ms: u64) -> Result<()> {

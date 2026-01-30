@@ -55,7 +55,9 @@ export type MovementCompleteEventData = z.infer<
 
 // Mutation schemas
 const jogStartMutation = z.object({
-  JogStart: z.string(),
+  JogStart: z.object({
+    jog_start: z.string(),
+  }),
 });
 
 const setEnablingMutation = z.object({
@@ -77,6 +79,10 @@ const downloadRefVelocityMutation = z.object({
 
 const downloadTargetPositionMutation = z.object({
   DownloadTargetPosition: z.number(),
+});
+
+const setProfileVelocityMutation = z.object({
+  SetProfileVelocity: z.number(),
 });
 
 const startMovementMutation = z.object({
@@ -134,6 +140,9 @@ export function useServoTestMachine(
   const { request: requestDownloadTargetPosition } = useMachineMutation(
     downloadTargetPositionMutation,
   );
+  const { request: requestSetProfileVelocity } = useMachineMutation(
+    setProfileVelocityMutation,
+  );
   const { request: requestStartMovement } = useMachineMutation(
     startMovementMutation,
   );
@@ -145,14 +154,14 @@ export function useServoTestMachine(
   const jogForward = useCallback(() => {
     requestJogStart({
       machine_identification_unique: machineIdentification,
-      data: { JogStart: "forward" },
+      data: { JogStart: { jog_start: "forward" } },
     });
   }, [machineIdentification, requestJogStart]);
 
   const jogBackward = useCallback(() => {
     requestJogStart({
       machine_identification_unique: machineIdentification,
-      data: { JogStart: "backward" },
+      data: { JogStart: { jog_start: "backward" } },
     });
   }, [machineIdentification, requestJogStart]);
 
@@ -236,6 +245,16 @@ export function useServoTestMachine(
     [machineIdentification, requestDownloadTargetPosition],
   );
 
+  const setProfileVelocity = useCallback(
+    (value: number) => {
+      requestSetProfileVelocity({
+        machine_identification_unique: machineIdentification,
+        data: { SetProfileVelocity: value },
+      });
+    },
+    [machineIdentification, requestSetProfileVelocity],
+  );
+
   const startMovement = useCallback(
     (params: {
       mode: string;
@@ -265,9 +284,21 @@ export function useServoTestMachine(
   const isLoading = stateOptimistic.isOptimistic;
   const isDisabled = !stateOptimistic.isInitialized;
 
+  // DEBUG: Log state structure to understand the issue
+  if (state?.DriveStateEvent) {
+    console.log('[DEBUG] DriveStateEvent structure:', {
+      hasData: 'data' in state.DriveStateEvent,
+      keys: Object.keys(state.DriveStateEvent),
+      sample: state.DriveStateEvent
+    });
+  }
+
+  // Extract data from the event structure { name, data, ts }
+  const driveState = state?.DriveStateEvent?.data;
+
   return {
     state,
-    driveState: state?.DriveStateEvent,
+    driveState,
     isLoading,
     isDisabled,
     // Actions
@@ -282,6 +313,7 @@ export function useServoTestMachine(
     downloadKvFactor,
     downloadRefVelocity,
     downloadTargetPosition,
+    setProfileVelocity,
     startMovement,
     setRawOutput,
   };

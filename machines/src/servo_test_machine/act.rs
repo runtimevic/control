@@ -11,6 +11,23 @@ impl<T: ServoDevice> MachineAct for ServoTestMachine<T> {
             self.act_machine_message(msg);
         }
 
+        // Update servo simulation (assumed 1ms cycle time)
+        block_on(async {
+            if let Some(mut servo) = self.servo.try_write() {
+                let pos_before = servo.servo().get_position_actual().unwrap_or(0);
+                let _ = servo.servo_mut().update(1);
+                let pos_after = servo.servo().get_position_actual().unwrap_or(0);
+                
+                // Log when position changes significantly
+                if (pos_after - pos_before).abs() > 50 {
+                    tracing::debug!(
+                        "Servo moving: {} -> {} (delta={})",
+                        pos_before, pos_after, pos_after - pos_before
+                    );
+                }
+            }
+        });
+
         // Emit state at 10 Hz (100ms) to match frontend expectation
         if now.duration_since(self.last_state_emit) > Duration::from_millis(100) {
             block_on(self.emit_state());

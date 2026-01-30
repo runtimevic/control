@@ -49,17 +49,33 @@ pub fn group_devices_by_identification(
     let mut device_groups: Vec<Vec<DeviceIdentificationIdentified>> = Vec::new();
     let mut unidentified_devices: Vec<DeviceIdentification> = Vec::new();
 
+    tracing::debug!(
+        "Grouping {} devices by identification",
+        device_identifications.len()
+    );
+
     for device_identification in device_identifications {
         // if vendor or serial or machine is 0, it is not a valid machine device
         if let Some(device_machine_identification) =
             device_identification.device_machine_identification.as_ref()
         {
             if !device_machine_identification.is_valid() {
+                tracing::debug!(
+                    "Device at index {:?} has invalid identification: vendor={} machine={} serial={}",
+                    device_identification.device_hardware_identification,
+                    device_machine_identification.machine_identification_unique.machine_identification.vendor,
+                    device_machine_identification.machine_identification_unique.machine_identification.machine,
+                    device_machine_identification.machine_identification_unique.serial
+                );
                 unidentified_devices.push(device_identification.clone());
 
                 continue;
             }
         } else {
+            tracing::debug!(
+                "Device at index {:?} has no machine identification",
+                device_identification.device_hardware_identification
+            );
             unidentified_devices.push(device_identification.clone());
             continue;
         }
@@ -95,11 +111,33 @@ pub fn group_devices_by_identification(
         }
 
         if !found {
-            let device_identification_identified = device_identification
+            let device_identification_identified: DeviceIdentificationIdentified = device_identification
                 .clone()
                 .try_into()
                 .expect("should have Some(DeviceMachineIdentification)");
+            tracing::debug!(
+                "Creating new device group for machine {}",
+                device_identification_identified.device_machine_identification.machine_identification_unique
+            );
             device_groups.push(vec![device_identification_identified]);
+        }
+    }
+
+    tracing::info!(
+        "Grouped {} devices into {} machine groups, {} unidentified",
+        device_identifications.len(),
+        device_groups.len(),
+        unidentified_devices.len()
+    );
+
+    for (i, group) in device_groups.iter().enumerate() {
+        if let Some(first) = group.first() {
+            tracing::debug!(
+                "Group {}: machine={} with {} devices",
+                i,
+                first.device_machine_identification.machine_identification_unique,
+                group.len()
+            );
         }
     }
 
@@ -116,6 +154,8 @@ pub async fn set_ethercat_devices<const MAX_SUBDEVICES: usize, const MAX_PDI: us
     shared_state: Arc<SharedState>,
     socket_queue_tx: Sender<(SocketRef, Arc<control_core::socketio::event::GenericEvent>)>,
 ) -> Result<(), anyhow::Error> {
+    tracing::info!("set_ethercat_devices called with {} device identifications", device_identifications.len());
+    
     let device_grouping_result = group_devices_by_identification(device_identifications);
     let machine_new_hardware = MachineNewHardware::Ethercat(hardware);
 
@@ -132,6 +172,12 @@ pub async fn set_ethercat_devices<const MAX_SUBDEVICES: usize, const MAX_PDI: us
             None => continue, // Skip this group if empty
         };
 
+        tracing::info!(
+            "Creating machine {} with {} devices",
+            machine_identification_unique,
+            device_group.len()
+        );
+
         let new_machine = machine_registry.new_machine(&MachineNewParams {
             device_group,
             hardware: &machine_new_hardware,
@@ -142,6 +188,10 @@ pub async fn set_ethercat_devices<const MAX_SUBDEVICES: usize, const MAX_PDI: us
 
         match new_machine {
             Ok(machine) => {
+                tracing::info!(
+                    "Successfully created machine {}",
+                    machine_identification_unique
+                );
                 shared_state.clone().api_machines.lock().await.insert(
                     machine_identification_unique.clone(),
                     machine.api_get_sender(),
@@ -152,10 +202,17 @@ pub async fn set_ethercat_devices<const MAX_SUBDEVICES: usize, const MAX_PDI: us
                 });
                 machines.push(machine);
             }
-            Err(e) => machine_objs.push(MachineObj {
-                machine_identification_unique,
-                error: Some(e.to_string()),
-            }),
+            Err(e) => {
+                tracing::error!(
+                    "Failed to create machine {}: {}",
+                    machine_identification_unique,
+                    e
+                );
+                machine_objs.push(MachineObj {
+                    machine_identification_unique,
+                    error: Some(e.to_string()),
+                })
+            }
         }
     }
     let _ = shared_state

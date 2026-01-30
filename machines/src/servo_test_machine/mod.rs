@@ -13,9 +13,6 @@ pub mod act;
 pub mod api;
 pub mod new;
 
-#[cfg(feature = "mock-machine")]
-pub mod mock;
-
 use crate::servo_test_machine::api::ServoTestMachineNamespace;
 use crate::{VENDOR_QITECH, SERVO_TEST_MACHINE};
 
@@ -60,11 +57,13 @@ impl<T: ServoDevice> ServoTestMachine<T> {
         
         let statusword = servo.servo().get_status_word().unwrap_or(0);
         
+        tracing::debug!("Servo state: pos={}, vel={}, status=0x{:04X}", position, velocity, statusword);
+        
         drop(servo); // Release lock
         
         // Parse CiA402 statusword flags
         let ready = statusword & 0x0001 != 0;
-        let switched_on = statusword & 0x0002 != 0;
+        let _switched_on = statusword & 0x0002 != 0;
         let operation_enabled = statusword & 0x0004 != 0;
         let fault = statusword & 0x0008 != 0;
         let target_reached = statusword & 0x0400 != 0;

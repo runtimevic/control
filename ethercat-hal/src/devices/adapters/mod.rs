@@ -51,6 +51,12 @@ pub trait ServoDevice: Send + Sync {
     /// Obtener el código de error
     fn get_error_code(&self) -> Result<u16>;
     
+    /// Establecer la velocidad de perfil (0x6081) para movimientos CSP
+    fn set_profile_velocity(&mut self, velocity: u32) -> Result<()>;
+    
+    /// Obtener la velocidad de perfil configurada (0x6081)
+    fn get_profile_velocity(&self) -> Result<u32>;
+    
     /// Actualizar la simulación (solo para simuladores, no-op para hardware)
     fn update(&mut self, delta_ms: u64) -> Result<()>;
     

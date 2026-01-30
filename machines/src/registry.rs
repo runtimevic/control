@@ -1,7 +1,7 @@
 #[cfg(feature = "mock-machine")]
 use crate::{
     extruder1::mock::ExtruderV2 as ExtruderV2Mock1, extruder2::mock::ExtruderV2 as ExtruderV2Mock2,
-    mock::MockMachine, winder2::mock::Winder2, servo_test_machine::mock::ServoTestMachineMock,
+    mock::MockMachine, winder2::mock::Winder2,
 };
 
 use crate::{
@@ -121,9 +121,6 @@ lazy_static! {
         #[cfg(feature = "mock-machine")]
         mc.register::<MockMachine>(MockMachine::MACHINE_IDENTIFICATION);
 
-        #[cfg(feature = "mock-machine")]
-        mc.register::<ServoTestMachineMock>(ServoTestMachineMock::MACHINE_IDENTIFICATION);
-
         #[cfg(not(feature = "mock-machine"))]
         mc.register::<LaserMachine>(LaserMachine::MACHINE_IDENTIFICATION);
 
@@ -137,7 +134,10 @@ lazy_static! {
         mc.register::<IP20TestMachine>(IP20TestMachine::MACHINE_IDENTIFICATION);
         mc.register::<AnalogInputTestMachine>(AnalogInputTestMachine::MACHINE_IDENTIFICATION);
         mc.register::<TestEL2008Machine>(TestEL2008Machine::MACHINE_IDENTIFICATION);
+        
+        #[cfg(not(feature = "mock-machine"))]
         mc.register::<ServoTestMachineLichuan>(ServoTestMachineLichuan::MACHINE_IDENTIFICATION);
+        #[cfg(not(feature = "mock-machine"))]
         mc.register::<ServoTestMachineMitsubishi>(ServoTestMachineMitsubishi::MACHINE_IDENTIFICATION);
 
         mc

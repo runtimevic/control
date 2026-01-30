@@ -1,7 +1,11 @@
 use crate::servo_test_machine::ServoTestMachine;
 use crate::servo_test_machine::api::ServoTestMachineNamespace;
+use crate::machine_identification::MachineIdentificationUnique;
 use smol::block_on;
+use smol::channel::Sender;
 use std::time::Instant;
+use std::sync::Arc;
+use smol::lock::RwLock;
 
 use crate::{
     MachineNewHardware, MachineNewParams, MachineNewTrait, get_ethercat_device,
@@ -11,6 +15,35 @@ use crate::{
 use anyhow::Error;
 use ethercat_hal::devices::adapters::{ServoAdapter, ServoDevice};
 use ethercat_hal::devices::{LICHUAN_LC10E_IDENTITY, SMC_MITSUBISHI_IDENTITY};
+
+impl<T: ServoDevice + Default + 'static> ServoTestMachine<T> {
+    /// Create a ServoTestMachine without EtherCAT hardware (for simulation/testing)
+    pub fn new_without_hardware(
+        machine_identification_unique: MachineIdentificationUnique,
+        main_thread_channel: Option<Sender<crate::AsyncThreadMessage>>,
+    ) -> Result<Self, Error> {
+        let now = Instant::now();
+        let (sender, receiver) = smol::channel::unbounded();
+        
+        // Create a simulated servo with default state
+        let servo = T::default();
+        let servo_adapter = ServoAdapter::new(servo);
+        
+        let machine = Self {
+            api_receiver: receiver,
+            api_sender: sender,
+            machine_identification_unique,
+            namespace: ServoTestMachineNamespace {
+                namespace: None,
+            },
+            last_state_emit: now,
+            main_sender: main_thread_channel,
+            servo: Arc::new(RwLock::new(servo_adapter)),
+        };
+        
+        Ok(machine)
+    }
+}
 
 impl<T: ServoDevice + Default + 'static> MachineNewTrait for ServoTestMachine<T> {
     fn new<'maindevice>(params: &MachineNewParams) -> Result<Self, Error> {

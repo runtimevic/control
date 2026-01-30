@@ -27,6 +27,7 @@ pub mod wago_modules;
 pub mod adapters;
 pub mod lichuan;
 pub mod smc_mitsubishi;
+pub mod mock_servo;
 
 // Re-exports
 pub use lichuan::{LichuanSimulator, LichuanHardware, is_lichuan_lc10e, LICHUAN_LC10E_IDENTITY};

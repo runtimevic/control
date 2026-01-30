@@ -64,6 +64,16 @@ impl<T: ServoDevice> ServoAdapter<T> {
         &mut self.servo
     }
     
+    /// Establece la velocidad de perfil (0x6081) para movimientos CSP
+    pub fn set_profile_velocity(&mut self, velocity: u32) -> Result<()> {
+        self.servo.set_profile_velocity(velocity)
+    }
+    
+    /// Obtiene la velocidad de perfil configurada (0x6081)
+    pub fn get_profile_velocity(&self) -> Result<u32> {
+        self.servo.get_profile_velocity()
+    }
+    
     /// Procesa el RxPDO aplicando los comandos al servo
     fn process_rx_pdo(&mut self) -> Result<()> {
         self.servo.process_control_word(self.rx_pdo.control_word)?;
@@ -209,6 +219,9 @@ mod tests {
         fn get_torque_actual(&self) -> Result<i16> { Ok(0) }
         fn get_mode_of_operation_display(&self) -> Result<i8> { Ok(0) }
         fn get_error_code(&self) -> Result<u16> { Ok(0) }
+        
+        fn set_profile_velocity(&mut self, _velocity: u32) -> Result<()> { Ok(()) }
+        fn get_profile_velocity(&self) -> Result<u32> { Ok(3000) }
 
         fn update(&mut self, _delta_ms: u64) -> Result<()> {
             // Simular movimiento hacia target

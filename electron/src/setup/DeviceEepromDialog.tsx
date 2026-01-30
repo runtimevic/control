@@ -51,6 +51,7 @@ type Device = NonNullable<EthercatDevicesEventData["Done"]>["devices"][number];
 
 type Props = {
   device: Device;
+  allDevices: Device[];
 };
 
 const formSchema = z.object({
@@ -61,7 +62,7 @@ const formSchema = z.object({
 
 type FormSchema = z.infer<typeof formSchema>;
 
-export function DeviceEepromDialog({ device }: Props) {
+export function DeviceEepromDialog({ device, allDevices }: Props) {
   const [open, setOpen] = React.useState(false);
   const key = useMemo(() => Math.random(), [open]);
   const onClose = () => setOpen(false);
@@ -79,7 +80,7 @@ export function DeviceEepromDialog({ device }: Props) {
           Assign
         </Button>
       </DialogTrigger>
-      <DeviceEeepromDialogContent device={device} key={key} setOpen={onClose} />
+      <DeviceEeepromDialogContent device={device} allDevices={allDevices} key={key} setOpen={onClose} />
     </Dialog>
   );
 }
@@ -87,10 +88,11 @@ export function DeviceEepromDialog({ device }: Props) {
 // (Empty comment block removed)
 type ContentProps = {
   device: Device;
+  allDevices: Device[];
   setOpen: () => void;
 };
 
-export function DeviceEeepromDialogContent({ device, setOpen }: ContentProps) {
+export function DeviceEeepromDialogContent({ device, allDevices, setOpen }: ContentProps) {
   const client = useClient();
   const serialInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -147,22 +149,57 @@ export function DeviceEeepromDialogContent({ device, setOpen }: ContentProps) {
 
   const machinePreset = useMemo(() => {
     if (!values.machine) return;
-    return getMachineProperties({
+    const preset = getMachineProperties({
       vendor: VENDOR_QITECH,
       machine: parseInt(values.machine),
     });
+    console.log("machinePreset:", preset);
+    console.log("device_roles:", preset?.device_roles);
+    return preset;
   }, [values.machine]);
 
   const filteredAllowedDevices = useMemo(
-    () =>
-      filterAllowedDevices(
+    () => {
+      const result = filterAllowedDevices(
         device.vendor_id,
         device.product_id,
         device.revision,
         machinePreset?.device_roles,
-      ),
+      );
+      console.log("filteredAllowedDevices:", result);
+      return result;
+    },
     [device.product_id, device.revision, machinePreset],
   );
+
+  // Get roles already assigned to the same machine/serial (excluding current device)
+  const assignedRoles = useMemo(() => {
+    if (!values.machine || !values.serial) return new Set<number>();
+    
+    const currentMachine = parseInt(values.machine);
+    const currentSerial = parseInt(values.serial);
+    const currentDeviceIndex = device.device_identification.device_hardware_identification.Ethercat?.subdevice_index;
+    
+    const roles = new Set<number>();
+    
+    allDevices.forEach((dev) => {
+      const devIdent = dev.device_identification.device_machine_identification;
+      const devIndex = dev.device_identification.device_hardware_identification.Ethercat?.subdevice_index;
+      
+      // Skip current device being edited
+      if (devIndex === currentDeviceIndex) return;
+      
+      // Check if device is assigned to the same machine/serial
+      if (
+        devIdent?.machine_identification_unique.machine_identification.machine === currentMachine &&
+        devIdent?.machine_identification_unique.serial === currentSerial
+      ) {
+        roles.add(devIdent.role);
+      }
+    });
+    
+    return roles;
+  }, [allDevices, values.machine, values.serial, device.device_identification.device_hardware_identification.Ethercat?.subdevice_index]);
 
   // if there is only one allowed role, set the role to that immediately
   useEffect(() => {
@@ -433,15 +470,22 @@ export function DeviceEeepromDialogContent({ device, setOpen }: ContentProps) {
                         <SelectValue placeholder="Device Role" />
                       </SelectTrigger>
                       <SelectContent>
-                        {machinePreset?.device_roles.map((device_role, i) => (
-                          <SelectItem
-                            key={device_role.role}
-                            value={device_role.role.toString()}
-                            disabled={!filteredAllowedDevices[i]}
-                          >
-                            <DeviceRoleComponent device_role={device_role} />
-                          </SelectItem>
-                        ))}
+                        {machinePreset?.device_roles.map((device_role, i) => {
+                          const isRoleAssigned = assignedRoles.has(device_role.role);
+                          const isDeviceCompatible = filteredAllowedDevices[i];
+                          const isDisabled = !isDeviceCompatible || isRoleAssigned;
+                          
+                          return (
+                            <SelectItem
+                              key={device_role.role}
+                              value={device_role.role.toString()}
+                              disabled={isDisabled}
+                            >
+                              <DeviceRoleComponent device_role={device_role} />
+                              {isRoleAssigned && " (Already Assigned)"}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </FormControl>

@@ -1,7 +1,7 @@
 import { Page } from "@/components/Page";
 import { ControlGrid } from "@/control/ControlGrid";
 import { ControlCard } from "@/control/ControlCard";
-import { Label } from "@/components/Label";
+import { Label } from "@/control/Label";
 import { Value } from "@/components/Value";
 import { Button } from "@/components/ui/button";
 import { NumberInputWithSubmit } from "@/components/NumberInputWithSubmit";
@@ -29,6 +29,7 @@ export function ServoTestMachineControl({
     downloadTargetPosition,
     downloadKvFactor,
     downloadRefVelocity,
+    setProfileVelocity,
   } = useServoTestMachine(machineIdentification);
 
   return (
@@ -156,17 +157,34 @@ export function ServoTestMachineControl({
         </ControlCard>
 
         {/* Position Control */}
-        <ControlCard title="Position Control">
-          <Label>
-            Target Position
-            <NumberInputWithSubmit
-              value={driveState?.setpoint_position ?? 0}
-              onSubmit={downloadTargetPosition}
-              disabled={isDisabled || isLoading}
-              step={1}
-              unit="units"
-            />
-          </Label>
+        <ControlCard title="Position Control (CSP Mode)">
+          <div className="space-y-4">
+            <Label>
+              Target Position
+              <NumberInputWithSubmit
+                value={driveState?.setpoint_position ?? 0}
+                onSubmit={downloadTargetPosition}
+                disabled={isDisabled || isLoading}
+                step={1}
+                unit="units"
+              />
+            </Label>
+            <Label>
+              Profile Velocity
+              <NumberInputWithSubmit
+                value={3000}
+                onSubmit={setProfileVelocity}
+                disabled={isDisabled || isLoading}
+                step={100}
+                min={100}
+                max={50000}
+                unit="units/s"
+              />
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              CSP mode: Set profile velocity, then target position. The servo moves at the configured velocity.
+            </p>
+          </div>
         </ControlCard>
 
         {/* Parameters */}
