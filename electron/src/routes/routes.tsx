@@ -62,6 +62,8 @@ import { AnalogInputTestMachine } from "@/machines/analoginputtestmachine/Analog
 import { AnalogInputTestMachineControl } from "@/machines/analoginputtestmachine/AnalogInputTestMachineControlPage";
 import { IP20TestMachinePage } from "@/machines/ip20testmachine/IP20TestMachinePage";
 import { IP20TestMachineControlPage } from "@/machines/ip20testmachine/IP20TestMachineControlPage";
+import { ServoTestMachinePage } from "@/machines/servotestmachine/ServoTestMachinePage";
+import { ServoTestMachineControlPage } from "@/machines/servotestmachine/ServoTestMachineControlPage";
 import { DriveTestPage } from "@/components/drive/DriveTestPage";
 
 import { MetricsGraphsPage } from "@/metrics/MetricsGraphsPage";
@@ -122,6 +124,18 @@ export const ip20TestMachineControlRoute = createRoute({
   getParentRoute: () => ip20TestMachineSerialRoute,
   path: "control",
   component: () => <IP20TestMachineControlPage />,
+});
+
+export const servoTestMachineSerialRoute = createRoute({
+  getParentRoute: () => machinesRoute,
+  path: "servotestmachine/$serial",
+  component: () => <ServoTestMachinePage />,
+});
+
+export const servoTestMachineControlRoute = createRoute({
+  getParentRoute: () => servoTestMachineSerialRoute,
+  path: "control",
+  component: () => <ServoTestMachineControlPage />,
 });
 
 export const driveTestRoute = createRoute({
@@ -448,6 +462,8 @@ export const rootTree = RootRoute.addChildren([
       ]),
 
       ip20TestMachineSerialRoute.addChildren([ip20TestMachineControlRoute]),
+
+      servoTestMachineSerialRoute.addChildren([servoTestMachineControlRoute]),
 
       driveTestRoute,
 

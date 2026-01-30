@@ -9,10 +9,8 @@ use crate::{
 };
 
 use anyhow::Error;
-use ethercat_hal::devices::adapters::ServoAdapter;
-use ethercat_hal::devices::servo::ServoDevice;
-use ethercat_hal::devices::lichuan::lc10e::{LichuanLC10E, LICHUAN_LC10E_IDENTITY};
-use ethercat_hal::devices::mitsubishi::mr_j4_tm::{MitsubishiMRJ4TM, MITSUBISHI_MRJ4TM_IDENTITY};
+use ethercat_hal::devices::adapters::{ServoAdapter, ServoDevice};
+use ethercat_hal::devices::{LICHUAN_LC10E_IDENTITY, SMC_MITSUBISHI_IDENTITY};
 
 impl<T: ServoDevice + Default + 'static> MachineNewTrait for ServoTestMachine<T> {
     fn new<'maindevice>(params: &MachineNewParams) -> Result<Self, Error> {
@@ -44,7 +42,7 @@ impl<T: ServoDevice + Default + 'static> MachineNewTrait for ServoTestMachine<T>
                 1,
                 vec![
                     LICHUAN_LC10E_IDENTITY,
-                    MITSUBISHI_MRJ4TM_IDENTITY,
+                    SMC_MITSUBISHI_IDENTITY,
                 ],
             )
             .await?

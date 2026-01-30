@@ -6,7 +6,7 @@ use control_core::socketio::{
         CacheFn, CacheableEvents, Namespace, NamespaceCacheingLogic, cache_first_and_last_event,
     },
 };
-use ethercat_hal::devices::servo::ServoDevice;
+use ethercat_hal::devices::adapters::ServoDevice;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -207,19 +207,23 @@ impl<T: ServoDevice> ServoTestMachine<T> {
             Mutation::Start => {
                 tracing::info!("Start");
                 let mut servo = self.servo.write().await;
-                servo.servo_mut().enable()?;
+                // CiA402: Enable operation (control word: shutdown -> switch on -> enable operation)
+                // Simplified: send enable operation control word (0x000F)
+                servo.servo_mut().process_control_word(0x000F)?;
                 Ok(())
             }
             Mutation::Stop => {
                 tracing::info!("Stop");
                 let mut servo = self.servo.write().await;
-                servo.servo_mut().disable()?;
+                // CiA402: Disable operation (control word: 0x0006 for quick stop or 0x0007 for disable voltage)
+                servo.servo_mut().process_control_word(0x0006)?;
                 Ok(())
             }
             Mutation::Reset => {
                 tracing::info!("Reset");
                 let mut servo = self.servo.write().await;
-                servo.servo_mut().reset_fault()?;
+                // CiA402: Fault reset (control word: 0x0080)
+                servo.servo_mut().process_control_word(0x0080)?;
                 Ok(())
             }
             Mutation::Reference => {
@@ -245,7 +249,7 @@ impl<T: ServoDevice> ServoTestMachine<T> {
             Mutation::DownloadTargetPosition { DownloadTargetPosition: value } => {
                 tracing::info!("Download Target Position: {}", value);
                 let mut servo = self.servo.write().await;
-                servo.servo_mut().set_position_setpoint(value)?;
+                servo.servo_mut().set_target_position(value as i32)?;
                 Ok(())
             }
             Mutation::StartMovement { StartMovement: params } => {

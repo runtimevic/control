@@ -29,8 +29,8 @@ pub mod lichuan;
 pub mod smc_mitsubishi;
 
 // Re-exports
-pub use lichuan::{LichuanSimulator, LichuanHardware, is_lichuan_lc10e};
-pub use smc_mitsubishi::{SmcMitsubishiSimulator, SmcMitsubishiHardware, is_smc_mitsubishi};
+pub use lichuan::{LichuanSimulator, LichuanHardware, is_lichuan_lc10e, LICHUAN_LC10E_IDENTITY};
+pub use smc_mitsubishi::{SmcMitsubishiSimulator, SmcMitsubishiHardware, is_smc_mitsubishi, SMC_MITSUBISHI_IDENTITY};
 pub use adapters::{ServoAdapter, ServoDevice};
 
 use super::devices::el1008::EL1008;

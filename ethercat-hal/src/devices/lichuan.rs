@@ -66,6 +66,13 @@ impl LichuanHardware {
 pub const LICHUAN_LC10E_VENDOR_ID: u32 = 0x00000766;
 pub const LICHUAN_LC10E_PRODUCT_CODE: u32 = 0x00000402;
 
+/// Identity tuple para Lichuan LC10E (vendor_id, product_code, revision)
+pub const LICHUAN_LC10E_IDENTITY: crate::devices::SubDeviceIdentityTuple = (
+    LICHUAN_LC10E_VENDOR_ID,
+    LICHUAN_LC10E_PRODUCT_CODE,
+    0x00000000, // revision number
+);
+
 /// Verifica si un dispositivo es un Lichuan LC10E basándose en Vendor ID y Product Code
 ///
 /// # Argumentos

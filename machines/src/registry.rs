@@ -1,7 +1,7 @@
 #[cfg(feature = "mock-machine")]
 use crate::{
     extruder1::mock::ExtruderV2 as ExtruderV2Mock1, extruder2::mock::ExtruderV2 as ExtruderV2Mock2,
-    mock::MockMachine, winder2::mock::Winder2,
+    mock::MockMachine, winder2::mock::Winder2, servo_test_machine::mock::ServoTestMachineMock,
 };
 
 use crate::{
@@ -22,12 +22,11 @@ use crate::test_machine::TestMachine;
 use crate::test_el2008_machine::TestEL2008Machine;
 
 // Import servo devices for type aliases
-use ethercat_hal::devices::lichuan::lc10e::LichuanLC10E;
-use ethercat_hal::devices::mitsubishi::mr_j4_tm::MitsubishiMRJ4TM;
+use ethercat_hal::devices::{LichuanSimulator, SmcMitsubishiSimulator};
 
 // Type aliases for specific servo machines
-type ServoTestMachineLichuan = ServoTestMachine<LichuanLC10E>;
-type ServoTestMachineMitsubishi = ServoTestMachine<MitsubishiMRJ4TM>;
+type ServoTestMachineLichuan = ServoTestMachine<LichuanSimulator>;
+type ServoTestMachineMitsubishi = ServoTestMachine<SmcMitsubishiSimulator>;
 
 use lazy_static::lazy_static;
 
@@ -121,6 +120,9 @@ lazy_static! {
 
         #[cfg(feature = "mock-machine")]
         mc.register::<MockMachine>(MockMachine::MACHINE_IDENTIFICATION);
+
+        #[cfg(feature = "mock-machine")]
+        mc.register::<ServoTestMachineMock>(ServoTestMachineMock::MACHINE_IDENTIFICATION);
 
         #[cfg(not(feature = "mock-machine"))]
         mc.register::<LaserMachine>(LaserMachine::MACHINE_IDENTIFICATION);

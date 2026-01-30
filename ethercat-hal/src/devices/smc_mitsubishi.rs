@@ -69,6 +69,13 @@ pub const SMC_MITSUBISHI_VENDOR_ID: u32 = 0x00000A1E;
 /// Product Code: MR-J4-TM
 pub const SMC_MITSUBISHI_PRODUCT_CODE: u32 = 0x00000201;
 
+/// Identity tuple para SMC-Mitsubishi MR-J4-TM (vendor_id, product_code, revision)
+pub const SMC_MITSUBISHI_IDENTITY: crate::devices::SubDeviceIdentityTuple = (
+    SMC_MITSUBISHI_VENDOR_ID,
+    SMC_MITSUBISHI_PRODUCT_CODE,
+    0x00000000, // revision number
+);
+
 /// Verifica si un dispositivo EtherCAT es un Mitsubishi MR-J4-TM
 ///
 /// # Argumentos

@@ -548,6 +548,18 @@ export const analogInputTestMachine: MachineProperties = {
   ],
 };
 
+export const servoTestMachine: MachineProperties = {
+  name: "ServoTest",
+  version: "V1",
+  slug: "servotestmachine",
+  icon: "lu:Cog",
+  machine_identification: {
+    vendor: VENDOR_QITECH,
+    machine: 0x0037,
+  },
+  device_roles: [],
+};
+
 export const ip20TestMachine: MachineProperties = {
   name: "IP20 Test",
   version: "V1",
@@ -584,6 +596,7 @@ export const machineProperties: MachineProperties[] = [
   testEL2008Machine,
   analogInputTestMachine,
   ip20TestMachine,
+  servoTestMachine,
 ];
 
 export const getMachineProperties = (
