@@ -1,0 +1,279 @@
+### Variables
+@baseUrl = http://localhost:3000
+@machineId = test_el2008_machine
+
+### ==============================================
+### CONTROL DE LEDs INDIVIDUALES
+### ==============================================
+
+### Encender LED 0
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 0,
+      "on": true
+    }
+  }
+}
+
+### Encender LED 3
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 3,
+      "on": true
+    }
+  }
+}
+
+### Apagar LED 3
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 3,
+      "on": false
+    }
+  }
+}
+
+### ==============================================
+### CONTROL DE TODOS LOS LEDs
+### ==============================================
+
+### Encender todos los LEDs
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetAllLeds",
+    "value": {
+      "on": true
+    }
+  }
+}
+
+### Apagar todos los LEDs
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetAllLeds",
+    "value": {
+      "on": false
+    }
+  }
+}
+
+### ==============================================
+### CAMBIO DE MODOS
+### ==============================================
+
+### Cambiar a modo Manual
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetMode",
+    "value": {
+      "mode": "Manual"
+    }
+  }
+}
+
+### Cambiar a modo Automático
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetMode",
+    "value": {
+      "mode": "Automatic"
+    }
+  }
+}
+
+### Cambiar a modo Home
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetMode",
+    "value": {
+      "mode": "Home"
+    }
+  }
+}
+
+### ==============================================
+### CONTROL DE ESTADO DE LA MÁQUINA
+### ==============================================
+
+### Iniciar la máquina (Start)
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "Start"
+  }
+}
+
+### Parar la máquina (Stop)
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "Stop"
+  }
+}
+
+### Resetear la máquina
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "Reset"
+  }
+}
+
+### ==============================================
+### CONFIGURACIÓN
+### ==============================================
+
+### Configurar delay automático a 200ms (rápido)
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetAutomaticDelay",
+    "value": {
+      "delay_ms": 200
+    }
+  }
+}
+
+### Configurar delay automático a 500ms (normal)
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetAutomaticDelay",
+    "value": {
+      "delay_ms": 500
+    }
+  }
+}
+
+### Configurar delay automático a 1000ms (lento)
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetAutomaticDelay",
+    "value": {
+      "delay_ms": 1000
+    }
+  }
+}
+
+### ==============================================
+### SECUENCIAS DE PRUEBA
+### ==============================================
+
+### Secuencia: Encender LEDs 0, 1, 2, 3
+# Ejecuta estos en orden para ver la secuencia
+
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 0,
+      "on": true
+    }
+  }
+}
+
+###
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 1,
+      "on": true
+    }
+  }
+}
+
+###
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 2,
+      "on": true
+    }
+  }
+}
+
+###
+POST {{baseUrl}}/api/v1/machine/mutate
+Content-Type: application/json
+
+{
+  "machine_identification_unique": "{{machineId}}",
+  "data": {
+    "action": "SetLed",
+    "value": {
+      "index": 3,
+      "on": true
+    }
+  }
+}
