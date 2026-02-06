@@ -1,0 +1,27 @@
+{
+  "id": "traffic-light",
+  "initial": "Red",
+  "states": {
+    "Red": {
+      "entry": ["activateRedLight"],
+      "exit": ["deactivateRedLight"],
+      "on": {
+        "TIMER": "Green"
+      }
+    },
+    "Yellow": {
+      "entry": ["activateYellowLight"],
+      "exit": ["deactivateYellowLight"],
+      "on": {
+        "TIMER": "Red"
+      }
+    },
+    "Green": {
+      "entry": ["activateGreenLight"],
+      "exit": ["deactivateGreenLight"],
+      "on": {
+        "TIMER": "Yellow"
+      }
+    }
+  }
+}

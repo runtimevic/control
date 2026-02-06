@@ -9,6 +9,7 @@ use machines::machine_identification::{MachineIdentification, MachineIdentificat
 pub enum NamespaceId {
     Main,
     Machine(MachineIdentificationUnique),
+    StateChart,
 }
 
 impl Serialize for NamespaceId {
@@ -18,6 +19,7 @@ impl Serialize for NamespaceId {
     {
         match self {
             Self::Main => serializer.serialize_str("/main"),
+            Self::StateChart => serializer.serialize_str("/statechart"),
             Self::Machine(id) => {
                 let path = format!(
                     "/machine/{}/{}/{}",
@@ -50,7 +52,11 @@ impl<'de> Deserialize<'de> for NamespaceId {
                 if value == "/main" {
                     return Ok(NamespaceId::Main);
                 }
+value == "/statechart" {
+                    return Ok(NamespaceId::StateChart);
+                }
 
+                if 
                 if let Some(machine_path) = value.strip_prefix("/machine/") {
                     let parts: Vec<&str> = machine_path.split('/').collect();
                     if parts.len() == 3 {

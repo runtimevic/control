@@ -1,0 +1,47 @@
+{
+  "id": "simple-motor-control",
+  "initial": "Stopped",
+  "states": {
+    "Stopped": {
+      "entry": ["disableMotor", "logStop"],
+      "on": {
+        "START": {
+          "target": "Starting",
+          "guard": "safetyOk",
+          "actions": ["checkSafety"]
+        }
+      }
+    },
+    "Starting": {
+      "entry": ["enableMotor", "rampUp"],
+      "on": {
+        "RUNNING": "Running",
+        "EMERGENCY_STOP": "Error"
+      }
+    },
+    "Running": {
+      "entry": ["logRunning"],
+      "exit": ["logExit"],
+      "on": {
+        "STOP": "Stopping",
+        "EMERGENCY_STOP": "Error"
+      }
+    },
+    "Stopping": {
+      "entry": ["rampDown"],
+      "on": {
+        "STOPPED": "Stopped"
+      }
+    },
+    "Error": {
+      "entry": ["disableMotor", "logError", "triggerAlarm"],
+      "on": {
+        "RESET": {
+          "target": "Stopped",
+          "guard": "errorCleared",
+          "actions": ["clearError"]
+        }
+      }
+    }
+  }
+}

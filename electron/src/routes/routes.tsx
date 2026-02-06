@@ -69,6 +69,8 @@ import { DriveTestPage } from "@/components/drive/DriveTestPage";
 import { MetricsGraphsPage } from "@/metrics/MetricsGraphsPage";
 import { MetricsControlPage } from "@/metrics/MetricsControlPage";
 
+import { StateChartEditorPage } from "@/statechart/StateChartEditorPage";
+
 // make a route tree like this
 // _mainNavigation/machines/winder2/$serial/control
 // _mainNavigation/configuration/a
@@ -399,6 +401,12 @@ export const metricsRoute = createRoute({
   ),
 });
 
+export const stateChartRoute = createRoute({
+  getParentRoute: () => sidebarRoute,
+  path: "statechart",
+  component: () => <StateChartEditorPage />,
+});
+
 export const versionSearchSchema = z
   .object({
     branch: fallback(z.string().optional(), undefined),
@@ -448,6 +456,7 @@ export const rootTree = RootRoute.addChildren([
       troubleshootRoute,
       metricsRoute,
     ]),
+    stateChartRoute,
     machinesRoute.addChildren([
       laser1SerialRoute.addChildren([
         laser1ControlRoute,

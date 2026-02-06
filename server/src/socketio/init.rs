@@ -1,4 +1,5 @@
 use super::namespace_id::NamespaceId;
+use super::statechart_namespace::{LoadStateMachineMessage, SendEventMessage};
 use crate::app_state::SharedState;
 use socketioxide::ParserConfig;
 use socketioxide::extract::SocketRef;
@@ -32,6 +33,48 @@ pub async fn init_socketio(app_state: Arc<SharedState>) -> SocketIoLayer {
     ) {
         tracing::error!("Failed to detect machine namespace: {}", err);
     }
+
+    // Clone app_state for statechart namespace
+    let app_state_statechart = app_state.clone();
+
+    // Setup /statechart namespace for state machine visualization
+    io.ns("/statechart", move |socket: SocketRef| {
+        tracing::info!("Socket connected to /statechart: {:?}", socket.id);
+
+        let room = app_state_statechart
+            .socketio_setup
+            .namespaces
+            .blocking_read()
+            .statechart_namespace
+            .clone();
+
+        let room_clone = room.clone();
+        socket.on("loadStateMachine", move |socket: SocketRef, msg| {
+            let room = room_clone.clone();
+            smol::spawn(async move {
+                room.on_load_state_machine(socket, msg).await;
+            })
+            .detach();
+        });
+
+        let room_clone = room.clone();
+        socket.on("sendEvent", move |socket: SocketRef, msg| {
+            let room = room_clone.clone();
+            smol::spawn(async move {
+                room.on_send_event(socket, msg).await;
+            })
+            .detach();
+        });
+
+        let room_clone = room.clone();
+        socket.on_disconnect(move |socket: SocketRef| {
+            let room = room_clone.clone();
+            smol::spawn(async move {
+                room.on_disconnect(socket).await;
+            })
+            .detach();
+        });
+    });
 
     // set the io to the app state
     let mut socketio_guard = app_state.socketio_setup.socketio.write().await;

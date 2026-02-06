@@ -88,6 +88,7 @@
     "@tanstack/router-devtools": "^1.105.0",
     "@tanstack/zod-adapter": "^1.116.0",
     "@vitejs/plugin-react": "^4.5.2",
+    "@xyflow/react": "^12.10.0",
     "babel-plugin-react-compiler": "^19.0.0-beta-714736e-20250131",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -112,6 +113,7 @@
     "tailwindcss-animate": "^1.0.7",
     "uplot": "^1.6.32",
     "xlsx": "^0.18.5",
+    "xstate": "^5.26.0",
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0",
     "zustand": "^5.0.8"

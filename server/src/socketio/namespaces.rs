@@ -1,4 +1,4 @@
-use super::{main_namespace::MainRoom, namespace_id::NamespaceId};
+use super::{main_namespace::MainRoom, namespace_id::NamespaceId, statechart_namespace::StateChartRoom};
 use control_core::socketio::event::GenericEvent;
 use smol::channel::Sender;
 use socketioxide::extract::SocketRef;
@@ -6,6 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 pub struct Namespaces {
     pub main_namespace: MainRoom,
+    pub statechart_namespace: StateChartRoom,
     pub machine_namespaces: HashMap<NamespaceId, control_core::socketio::namespace::Namespace>,
 }
 
@@ -30,6 +31,7 @@ impl Namespaces {
     pub fn new(socket_queue_tx: Sender<(SocketRef, Arc<GenericEvent>)>) -> Self {
         Self {
             main_namespace: MainRoom::new(socket_queue_tx),
+            statechart_namespace: StateChartRoom::new(),
             machine_namespaces: HashMap::new(),
         }
     }

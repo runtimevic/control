@@ -1,0 +1,93 @@
+{
+  "id": "motor-control-hardware",
+  "initial": "Stopped",
+  "states": {
+    "Stopped": {
+      "entry": ["disableMotor", "setRedLight", "logStop"],
+      "exit": ["clearRedLight"],
+      "on": {
+        "START": {
+          "target": "CheckingSafety",
+          "actions": ["logStartRequest"]
+        }
+      }
+    },
+    "CheckingSafety": {
+      "entry": ["checkEmergencyStop", "checkDoorClosed", "logSafetyCheck"],
+      "on": {
+        "SAFETY_OK": {
+          "target": "Starting",
+          "guard": "systemSafe",
+          "actions": ["logSafetyPassed"]
+        },
+        "SAFETY_FAILED": {
+          "target": "Error",
+          "actions": ["logSafetyFailed"]
+        }
+      }
+    },
+    "Starting": {
+      "entry": ["enableMotor", "setYellowLight", "rampUp", "logStarting"],
+      "exit": ["clearYellowLight"],
+      "on": {
+        "MOTOR_READY": {
+          "target": "Running",
+          "guard": "motorSpeedOk",
+          "actions": ["logMotorReady"]
+        },
+        "EMERGENCY_STOP": {
+          "target": "Error",
+          "actions": ["emergencyShutdown"]
+        },
+        "TIMEOUT": {
+          "target": "Error",
+          "actions": ["logStartTimeout"]
+        }
+      }
+    },
+    "Running": {
+      "entry": ["setGreenLight", "enableFullPower", "logRunning"],
+      "exit": ["clearGreenLight", "disableFullPower"],
+      "on": {
+        "STOP": {
+          "target": "Stopping",
+          "actions": ["acknowledgeStop"]
+        },
+        "EMERGENCY_STOP": {
+          "target": "Error",
+          "actions": ["emergencyShutdown"]
+        },
+        "DOOR_OPENED": {
+          "target": "Stopping",
+          "actions": ["logDoorOpened"]
+        }
+      }
+    },
+    "Stopping": {
+      "entry": ["setYellowLight", "rampDown", "logStopping"],
+      "exit": ["clearYellowLight"],
+      "on": {
+        "MOTOR_STOPPED": {
+          "target": "Stopped",
+          "guard": "motorSpeedZero",
+          "actions": ["confirmStopped"]
+        },
+        "EMERGENCY_STOP": {
+          "target": "Error",
+          "actions": ["emergencyShutdown"]
+        }
+      }
+    },
+    "Error": {
+      "type": "final",
+      "entry": ["disableMotor", "setRedLight", "triggerAlarm", "logError"],
+      "on": {
+        "RESET": {
+          "target": "Stopped",
+          "guard": "errorCleared",
+          "actions": ["clearError", "clearAlarm", "logReset"]
+        }
+      }
+    }
+  }
+}
