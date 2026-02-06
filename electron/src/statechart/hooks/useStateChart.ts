@@ -106,6 +106,41 @@ export const useStateChart = () => {
     setEdges((eds) => eds.filter((edge) => !edge.selected));
   }, []);
 
+  const autoLayout = useCallback(() => {
+    setNodes((currentNodes) => {
+      const nodeCount = currentNodes.length;
+      const useCircularLayout = nodeCount <= 6;
+      
+      return currentNodes.map((node, index) => {
+        let position;
+        
+        if (useCircularLayout) {
+          // Circular layout
+          const radius = 250;
+          const centerX = 400;
+          const centerY = 300;
+          const angle = (index / nodeCount) * 2 * Math.PI - Math.PI / 2;
+          position = {
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle),
+          };
+        } else {
+          // Grid layout with more spacing
+          const cols = Math.ceil(Math.sqrt(nodeCount));
+          position = {
+            x: 150 + (index % cols) * 350,
+            y: 150 + Math.floor(index / cols) * 250,
+          };
+        }
+        
+        return {
+          ...node,
+          position,
+        };
+      });
+    });
+  }, []);
+
   const exportToXState = useCallback((): XStateConfig => {
     const initialNode = nodes.find((n) => n.data.type === "initial");
 
@@ -169,6 +204,11 @@ export const useStateChart = () => {
     let nodeIdCounter = 1;
     const labelToId: Record<string, string> = {};
 
+    const stateCount = Object.keys(config.states).length;
+    
+    // Choose layout based on number of states
+    const useCircularLayout = stateCount <= 6;
+    
     // Create nodes
     Object.entries(config.states).forEach(([stateName, stateConfig], index) => {
       const nodeId = `${nodeIdCounter++}`;
@@ -178,13 +218,31 @@ export const useStateChart = () => {
       const isFinal = stateConfig.type === "final";
       const isCompound = stateConfig.type === "compound";
 
+      let position;
+      
+      if (useCircularLayout) {
+        // Circular layout for small state machines
+        const radius = 200;
+        const centerX = 400;
+        const centerY = 300;
+        const angle = (index / stateCount) * 2 * Math.PI - Math.PI / 2;
+        position = {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+        };
+      } else {
+        // Grid layout for larger state machines with more spacing
+        const cols = Math.ceil(Math.sqrt(stateCount));
+        position = {
+          x: 150 + (index % cols) * 300,
+          y: 150 + Math.floor(index / cols) * 200,
+        };
+      }
+
       newNodes.push({
         id: nodeId,
         type: "stateNode",
-        position: {
-          x: 100 + (index % 4) * 200,
-          y: 100 + Math.floor(index / 4) * 150,
-        },
+        position,
         data: {
           label: stateName,
           type: isInitial ? "initial" : isFinal ? "final" : isCompound ? "compound" : "normal",
@@ -203,8 +261,10 @@ export const useStateChart = () => {
           const targetId = labelToId[targetLabel];
 
           if (targetId) {
+            // Use event name in edge ID to ensure uniqueness
+            const edgeId = `e${sourceId}-${targetId}-${event}`;
             newEdges.push({
-              id: `e${sourceId}-${targetId}`,
+              id: edgeId,
               source: sourceId,
               target: targetId,
               type: "smoothstep",
@@ -233,6 +293,7 @@ export const useStateChart = () => {
     updateNodeData,
     updateEdgeData,
     deleteSelected,
+    autoLayout,
     exportToXState,
     importFromXState,
     setNodes,

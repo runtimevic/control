@@ -1,5 +1,5 @@
 use crate::state_machine::types::{ContextValue, MachineContext};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 

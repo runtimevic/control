@@ -52,11 +52,11 @@ impl<'de> Deserialize<'de> for NamespaceId {
                 if value == "/main" {
                     return Ok(NamespaceId::Main);
                 }
-value == "/statechart" {
+                
+                if value == "/statechart" {
                     return Ok(NamespaceId::StateChart);
                 }
 
-                if 
                 if let Some(machine_path) = value.strip_prefix("/machine/") {
                     let parts: Vec<&str> = machine_path.split('/').collect();
                     if parts.len() == 3 {
@@ -123,6 +123,7 @@ impl fmt::Display for NamespaceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Main => write!(f, "/main"),
+            Self::StateChart => write!(f, "/statechart"),
             Self::Machine(id) => {
                 write!(
                     f,

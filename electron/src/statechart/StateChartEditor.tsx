@@ -22,15 +22,20 @@ import {
   Save,
   PlayCircle,
   StopCircle,
+  LayoutGrid,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const nodeTypes = {
   stateNode: StateNode,
 };
 
 export const StateChartEditor: React.FC = () => {
+  // All hooks must be called in the same order every render
+  // 1. Custom hooks first
   const {
     nodes,
     edges,
@@ -41,6 +46,7 @@ export const StateChartEditor: React.FC = () => {
     updateNodeData,
     updateEdgeData,
     deleteSelected,
+    autoLayout,
     exportToXState,
     importFromXState,
     setNodes,
@@ -56,13 +62,33 @@ export const StateChartEditor: React.FC = () => {
     loadError,
   } = useStateMachineSocket();
 
+  // 2. useState hooks
   const [selectedNode, setSelectedNode] = useState<StateChartNode | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<StateChartEdge | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [autoSimulate, setAutoSimulate] = useState(false);
+
+  // 3. useEffect hooks
+  // Auto-simulate: Send first available event every 2 seconds
+  useEffect(() => {
+    if (!autoSimulate || !isRunning || availableEvents.length === 0) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      if (availableEvents.length > 0) {
+        const nextEvent = availableEvents[0];
+        console.log(`[Auto-Simulate] Sending event: ${nextEvent}`);
+        sendEvent(nextEvent);
+      }
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [autoSimulate, isRunning, availableEvents, sendEvent]);
 
   // Highlight active node when execution state changes
   useEffect(() => {
-    if (!currentState) {
+    if (!currentState || !isRunning) {
       // Clear highlighting when not running
       setNodes((nds) =>
         nds.map((node) => ({
@@ -82,8 +108,9 @@ export const StateChartEditor: React.FC = () => {
         },
       }))
     );
-  }, [currentState, setNodes]);
+  }, [currentState, isRunning, setNodes]);
 
+  // 4. useCallback hooks
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: StateChartNode) => {
       setSelectedNode(node);
@@ -113,13 +140,14 @@ export const StateChartEditor: React.FC = () => {
     const link = document.createElement("a");
     link.href = url;
     link.download = "statechart.json";
-    loadMachine(xstateConfig);
-    setIsRunning(true);
-    console.log("[StateChart] Running state machine in backend");
-  }, [exportToXState, loadMachine]);
+    link.click();
+    URL.revokeObjectURL(url);
+    console.log("[StateChart] Exported state machine");
+  }, [exportToXState]);
 
   const handleStop = useCallback(() => {
     setIsRunning(false);
+    setAutoSimulate(false);
     // Clear highlighting
     setNodes((nds) =>
       nds.map((node) => ({
@@ -134,8 +162,16 @@ export const StateChartEditor: React.FC = () => {
       sendEvent(event);
     },
     [sendEvent]
-  
+  );
+
   const handleImport = useCallback(() => {
+    // Stop any running simulation first
+    if (isRunning || autoSimulate) {
+      console.log("[StateChart] Stopping simulation before import");
+      setIsRunning(false);
+      setAutoSimulate(false);
+    }
+    
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "application/json";
@@ -146,6 +182,7 @@ export const StateChartEditor: React.FC = () => {
         reader.onload = (event) => {
           try {
             const config = JSON.parse(event.target?.result as string);
+            console.log("[StateChart] Importing new state machine:", config.id);
             importFromXState(config);
           } catch (error) {
             console.error("Error importing JSON:", error);
@@ -156,7 +193,7 @@ export const StateChartEditor: React.FC = () => {
       }
     };
     input.click();
-  }, [importFromXState]);
+  }, [importFromXState, isRunning, autoSimulate]);
 
   const handleSave = useCallback(() => {
     const xstateConfig = exportToXState();
@@ -167,10 +204,10 @@ export const StateChartEditor: React.FC = () => {
 
   const handleRun = useCallback(() => {
     const xstateConfig = exportToXState();
-    console.log("Running StateChart:", xstateConfig);
-    // TODO: Send to backend Rust server
-    alert("Would send to backend for execution. Check console for JSON.");
-  }, [exportToXState]);
+    console.log("[StateChart] Loading state machine into backend:", xstateConfig);
+    loadMachine(xstateConfig);
+    setIsRunning(true);
+  }, [exportToXState, loadMachine]);
 
   return (
     <div className="flex h-full">
@@ -198,6 +235,25 @@ export const StateChartEditor: React.FC = () => {
                 <Plus className="h-4 w-4 mr-1" />
                 Add State
               </Button>
+              <Separator orientation="vertical" className="h-8" />
+              <Button 
+                size="sm" 
+                onClick={handleImport} 
+                variant="outline"
+              >
+                <Upload className="h-4 w-4 mr-1" />
+                Import
+              </Button>
+              <Button size="sm" onClick={handleExport} variant="outline">
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </Button>
+              <Separator orientation="vertical" className="h-8" />
+              <Button size="sm" onClick={autoLayout} variant="outline">
+                <LayoutGrid className="h-4 w-4 mr-1" />
+                Auto Layout
+              </Button>
+              <Separator orientation="vertical" className="h-8" />
               {!isRunning ? (
                 <Button 
                   size="sm" 
@@ -209,10 +265,17 @@ export const StateChartEditor: React.FC = () => {
                   Run in Backend
                 </Button>
               ) : (
-                <Button size="sm" onClick={handleStop} variant="destructive">
-                  <StopCircle className="h-4 w-4 mr-1" />
-                  Stop
-                </Button>
+                <>
+                  <Button size="sm" onClick={handleStop} variant="destructive">
+                    <StopCircle className="h-4 w-4 mr-1" />
+                    Stop
+                  </Button>
+                  {autoSimulate && (
+                    <Badge variant="default" className="animate-pulse">
+                      Auto-simulating...
+                    </Badge>
+                  )}
+                </>
               )}
               {!isConnected && (
                 <Badge variant="destructive">Disconnected</Badge>
@@ -224,7 +287,18 @@ export const StateChartEditor: React.FC = () => {
           {isRunning && currentState && (
             <Panel position="top-right" className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-lg shadow-lg border p-3">
               <div className="space-y-2">
-                <div className="text-sm font-semibold">Execution State</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">Execution State</div>
+                  <Button 
+                    size="sm" 
+                    onClick={handleStop} 
+                    variant="destructive"
+                    className="h-6 text-xs"
+                  >
+                    <StopCircle className="h-3 w-3 mr-1" />
+                    Stop
+                  </Button>
+                </div>
                 <div className="text-xs space-y-1">
                   <div>
                     <span className="text-muted-foreground">Current:</span>{" "}
@@ -252,6 +326,25 @@ export const StateChartEditor: React.FC = () => {
                       </Button>
                     ))}
                   </div>
+                  <Separator className="my-2" />
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="auto-simulate"
+                      checked={autoSimulate}
+                      onCheckedChange={(checked) => setAutoSimulate(checked === true)}
+                    />
+                    <Label
+                      htmlFor="auto-simulate"
+                      className="text-xs font-normal cursor-pointer"
+                    >
+                      Auto-simulate (2s interval)
+                    </Label>
+                  </div>
+                  {autoSimulate && (
+                    <div className="text-xs text-muted-foreground pt-1 border-t">
+                      💡 Click Stop button or uncheck above to pause
+                    </div>
+                  )}
                 </div>
               </div>
             </Panel>
@@ -264,25 +357,7 @@ export const StateChartEditor: React.FC = () => {
                 <strong>Error:</strong> {loadError}
               </div>
             </Panel>
-          )}ton size="sm" onClick={handleSave} variant="outline">
-                <Save className="h-4 w-4 mr-1" />
-                Save
-              </Button>
-              <Button size="sm" onClick={handleExport} variant="outline">
-                <Download className="h-4 w-4 mr-1" />
-                Export JSON
-              </Button>
-              <Button size="sm" onClick={handleImport} variant="outline">
-                <Upload className="h-4 w-4 mr-1" />
-                Import JSON
-              </Button>
-              <Separator orientation="vertical" className="h-8" />
-              <Button size="sm" onClick={handleRun} variant="secondary">
-                <PlayCircle className="h-4 w-4 mr-1" />
-                Run in Backend
-              </Button>
-            </div>
-          </Panel>
+          )}
         </ReactFlow>
       </div>
 

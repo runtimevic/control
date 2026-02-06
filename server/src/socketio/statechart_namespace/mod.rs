@@ -6,15 +6,13 @@
 //! - Sending events to trigger transitions
 //! - Real-time execution state updates to frontend
 
-use control_core::state_machine::{
-    Action, ActionRegistry, ExecutionState, GuardRegistry, MachineContext, StateMachine,
-};
-use control_core::socketio::namespace::Namespace;
+use control_core::state_machine::{ExecutionState, StateMachine};
+use control_core::socketio::event::Event;
 use serde::{Deserialize, Serialize};
-use smol::channel::Sender;
 use socketioxide::extract::{Data, SocketRef};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info, instrument, warn};
 
 pub mod hardware_actions;
@@ -53,6 +51,26 @@ impl StateChartRoom {
         }
     }
 
+    /// Helper to emit events in the standard format
+    fn emit_event<T: Serialize + Send + Sync + Clone + 'static>(
+        socket: &SocketRef,
+        name: &str,
+        data: T,
+    ) -> Result<(), socketioxide::SendError> {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        let event = Event {
+            name: name.to_string(),
+            data,
+            ts,
+        };
+
+        socket.emit("event", &event)
+    }
+
     /// Handler for loading a new state machine
     #[instrument(skip(self, socket))]
     pub async fn on_load_state_machine(
@@ -65,7 +83,7 @@ impl StateChartRoom {
 
         match StateMachine::from_json(&msg.config) {
             Ok(mut machine) => {
-                info!("Successfully parsed state machine: {}", machine.id());
+                info!("Successfully parsed state machine");
                 
                 // Register hardware-specific actions and guards
                 hardware_actions::register_actions(machine.actions_mut());
@@ -83,12 +101,12 @@ impl StateChartRoom {
                     execution_state: Some(exec_state.clone()),
                 };
 
-                if let Err(e) = socket.emit("loadStateMachineResponse", response) {
+                if let Err(e) = Self::emit_event(&socket, "loadStateMachineResponse", response) {
                     error!("Failed to send loadStateMachineResponse: {:?}", e);
                 }
 
                 // Send initial execution state
-                if let Err(e) = socket.emit("executionState", exec_state) {
+                if let Err(e) = Self::emit_event(&socket, "executionState", exec_state) {
                     error!("Failed to send initial executionState: {:?}", e);
                 }
             }
@@ -100,7 +118,7 @@ impl StateChartRoom {
                     execution_state: None,
                 };
 
-                if let Err(e) = socket.emit("loadStateMachineResponse", response) {
+                if let Err(e) = Self::emit_event(&socket, "loadStateMachineResponse", response) {
                     error!("Failed to send error response: {:?}", e);
                 }
             }
@@ -132,7 +150,7 @@ impl StateChartRoom {
 
                     // Send updated execution state
                     let exec_state = machine.execution_state();
-                    if let Err(e) = socket.emit("executionState", exec_state) {
+                    if let Err(e) = Self::emit_event(&socket, "executionState", exec_state) {
                         error!("Failed to send executionState: {:?}", e);
                     }
                 } else {

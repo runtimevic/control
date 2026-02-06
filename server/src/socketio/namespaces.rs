@@ -17,6 +17,9 @@ impl Namespaces {
     ) -> Result<&mut control_core::socketio::namespace::Namespace, anyhow::Error> {
         match namespace_id.clone() {
             NamespaceId::Main => Ok(&mut self.main_namespace.namespace),
+            NamespaceId::StateChart => {
+                return Err(anyhow::anyhow!("StateChart namespace does not use generic namespace"));
+            }
             NamespaceId::Machine(_) => {
                 let res = self.machine_namespaces.get_mut(&namespace_id);
                 let namespace = match res {

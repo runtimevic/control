@@ -8,6 +8,7 @@ pub mod modbus;
 pub mod realtime;
 pub mod serial;
 pub mod socketio;
+pub mod state_machine;
 pub mod transmission;
 
 #[cfg(feature = "video-streaming")]

@@ -116,6 +116,12 @@ export function SidebarLayout() {
       icon: machine.icon,
     })),
     {
+      link: "/_sidebar/statechart",
+      activeLink: "/_sidebar/statechart",
+      title: "StateChart",
+      icon: "lu:Network",
+    },
+    {
       link: "/_sidebar/setup/ethercat",
       activeLink: "/_sidebar/setup",
       title: "Setup",

@@ -1,5 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
-import { useSocketioStore } from "@/client/socketioStore";
+import { useCallback, useRef, useState, useEffect } from "react";
+import { 
+  createNamespaceHookImplementation, 
+  EventHandler,
+  NamespaceId,
+  useSocketioStore
+} from "@/client/socketioStore";
+import { create, StoreApi } from "zustand";
 import type { ExecutionState, XStateConfig } from "../types";
 
 interface LoadStateMachineMessage {
@@ -16,69 +22,99 @@ interface LoadStateMachineResponse {
   execution_state?: ExecutionState;
 }
 
+interface StateMachineStore {
+  executionState: ExecutionState | null;
+  loadError: string | null;
+}
+
+function createStateMachineStore(): StoreApi<StateMachineStore> {
+  return create<StateMachineStore>(() => ({
+    executionState: null,
+    loadError: null,
+  }));
+}
+
+function stateMachineMessageHandler(store: StoreApi<StateMachineStore>): EventHandler {
+  return (event: any) => {
+    const eventName = event.name;
+    
+    try {
+      if (eventName === "executionState") {
+        console.log("[StateChart] Received executionState:", event.data);
+        store.setState({ executionState: event.data });
+      } else if (eventName === "loadStateMachineResponse") {
+        const response = event.data as LoadStateMachineResponse;
+        console.log("[StateChart] Load response:", response);
+        if (!response.success) {
+          store.setState({ loadError: response.message });
+        } else {
+          store.setState({ 
+            loadError: null,
+            executionState: response.execution_state || null 
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`Error processing ${eventName} event:`, error);
+    }
+  };
+}
+
+const stateMachineStore = createStateMachineStore();
+const stateMachineImplementation = createNamespaceHookImplementation({
+  createStore: () => stateMachineStore,
+  createEventHandler: stateMachineMessageHandler,
+});
+
+function useStateMachineNamespace(): StateMachineStore {
+  const namespaceId = useRef({ type: "statechart" } satisfies NamespaceId);
+  return stateMachineImplementation(namespaceId.current);
+}
+
 /**
  * Hook for connecting to the /statechart Socket.IO namespace
  * Provides real-time state machine execution and visualization
  */
 export const useStateMachineSocket = () => {
-  const [executionState, setExecutionState] = useState<ExecutionState | null>(null);
+  const store = useStateMachineNamespace();
+  const namespaceId: NamespaceId = { type: "statechart" };
+  
+  // Track connection status with local state
   const [isConnected, setIsConnected] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  // Connect to /statechart namespace
-  const { socket } = useSocketioStore("/statechart");
-
+  const socketStore = useSocketioStore();
+  
+  // Monitor socket connection status
   useEffect(() => {
-    if (!socket) return;
-
-    // Connection status
-    setIsConnected(socket.connected);
-    socket.on("connect", () => setIsConnected(true));
-    socket.on("disconnect", () => setIsConnected(false));
-
-    // Listen for execution state updates
-    socket.on("executionState", (state: ExecutionState) => {
-      console.log("[StateChart] Received executionState:", state);
-      setExecutionState(state);
-    });
-
-    // Listen for load response
-    socket.on("loadStateMachineResponse", (response: LoadStateMachineResponse) => {
-      console.log("[StateChart] Load response:", response);
-      if (!response.success) {
-        setLoadError(response.message);
-      } else {
-        setLoadError(null);
-        if (response.execution_state) {
-          setExecutionState(response.execution_state);
-        }
-      }
-    });
-
-    return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("executionState");
-      socket.off("loadStateMachineResponse");
+    const checkConnection = () => {
+      const namespace = socketStore.getNamespace(namespaceId);
+      const connected = namespace?.socket?.connected ?? false;
+      setIsConnected(connected);
     };
-  }, [socket]);
+    
+    // Check immediately and then poll for changes
+    checkConnection();
+    const intervalId = setInterval(checkConnection, 100);
+    
+    return () => clearInterval(intervalId);
+  }, [socketStore, namespaceId]);
 
   /**
    * Load a state machine configuration into the backend
    */
   const loadMachine = useCallback(
     (config: XStateConfig) => {
-      if (!socket) {
-        console.error("[StateChart] Socket not connected");
-        return;
-      }
-
       const json = JSON.stringify(config);
       console.log("[StateChart] Loading state machine:", config.id);
       
-      socket.emit("loadStateMachine", { config: json } as LoadStateMachineMessage);
+      const socketStore = useSocketioStore.getState();
+      const namespace = socketStore.getNamespace(namespaceId);
+      if (namespace?.socket) {
+        namespace.socket.emit("loadStateMachine", { config: json } as LoadStateMachineMessage);
+      } else {
+        console.error("[StateChart] Socket not connected");
+      }
     },
-    [socket]
+    [namespaceId]
   );
 
   /**
@@ -86,39 +122,36 @@ export const useStateMachineSocket = () => {
    */
   const sendEvent = useCallback(
     (event: string) => {
-      if (!socket) {
-        console.error("[StateChart] Socket not connected");
-        return;
-      }
-
-      if (!executionState) {
-        console.warn("[StateChart] No state machine loaded");
-        return;
-      }
-
       console.log("[StateChart] Sending event:", event);
-      socket.emit("sendEvent", { event } as SendEventMessage);
+      
+      const socketStore = useSocketioStore.getState();
+      const namespace = socketStore.getNamespace(namespaceId);
+      if (namespace?.socket) {
+        namespace.socket.emit("sendEvent", { event } as SendEventMessage);
+      } else {
+        console.error("[StateChart] Socket not connected");
+      }
     },
-    [socket, executionState]
+    [namespaceId]
   );
 
   /**
    * Get available events from current state
    */
-  const availableEvents = executionState?.available_events || [];
+  const availableEvents = store.executionState?.available_events || [];
 
   /**
    * Get current state name
    */
-  const currentState = executionState?.current_state;
+  const currentState = store.executionState?.current_state;
 
   /**
    * Get previous state name
    */
-  const previousState = executionState?.previous_state;
+  const previousState = store.executionState?.previous_state;
 
   return {
-    // Connection status
+    // Connection status (from real-time socket state)
     isConnected,
     
     // State machine control
@@ -126,12 +159,12 @@ export const useStateMachineSocket = () => {
     sendEvent,
     
     // Execution state
-    executionState,
+    executionState: store.executionState,
     currentState,
     previousState,
     availableEvents,
     
     // Error handling
-    loadError,
+    loadError: store.loadError,
   };
 };

@@ -152,6 +152,7 @@ export type Event<T extends z.ZodTypeAny> = z.infer<
  */
 export type NamespaceId =
   | { type: "main" }
+  | { type: "statechart" }
   | {
       type: "machine";
       machine_identification_unique: MachineIdentificationUnique;
@@ -205,6 +206,8 @@ type Namespace<S> = {
 export function serializeNamespaceId(namespaceId: NamespaceId): string {
   if (namespaceId.type === "main") {
     return "/main";
+  } else if (namespaceId.type === "statechart") {
+    return "/statechart";
   } else if (namespaceId.type === "machine") {
     return `/machine/${namespaceId.machine_identification_unique.machine_identification.vendor}/${namespaceId.machine_identification_unique.machine_identification.machine}/${namespaceId.machine_identification_unique.serial}`;
   } else {
@@ -218,7 +221,12 @@ export function serializeNamespaceId(namespaceId: NamespaceId): string {
 export function deserializeNamespaceId(namespaceId: string): NamespaceId {
   const parts = namespaceId.split("/");
   if (parts.length === 2 && parts[0] === "") {
-    // /main
+    // /main or /statechart
+    if (parts[1] === "main") {
+      return { type: "main" };
+    } else if (parts[1] === "statechart") {
+      return { type: "statechart" };
+    }
     return { type: "main" };
   } else if (parts.length === 5 && parts[0] === "machine") {
     // /machine/0/0/0
@@ -263,7 +271,7 @@ type SocketioStore = {
 /**
  * Global socket store singleton that manages socket.io connections and namespaces
  */
-const useSocketioStore = create<SocketioStore>()((set, get) => ({
+export const useSocketioStore = create<SocketioStore>()((set, get) => ({
   baseUrl: "http://localhost:3001",
   namespaces: {},
   getNamespace: (namespaceId: NamespaceId) => {
@@ -342,7 +350,7 @@ const useSocketioStore = create<SocketioStore>()((set, get) => ({
       }),
     );
 
-    if (namespace_path !== "/main") {
+    if (namespace_path !== "/main" && namespace_path !== "/statechart") {
       const intervalId = setInterval(() => {
         const mainState = mainNamespaceStore.getState();
         const machineExists =

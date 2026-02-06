@@ -1,5 +1,4 @@
 use super::namespace_id::NamespaceId;
-use super::statechart_namespace::{LoadStateMachineMessage, SendEventMessage};
 use crate::app_state::SharedState;
 use socketioxide::ParserConfig;
 use socketioxide::extract::SocketRef;
@@ -41,12 +40,14 @@ pub async fn init_socketio(app_state: Arc<SharedState>) -> SocketIoLayer {
     io.ns("/statechart", move |socket: SocketRef| {
         tracing::info!("Socket connected to /statechart: {:?}", socket.id);
 
-        let room = app_state_statechart
-            .socketio_setup
-            .namespaces
-            .blocking_read()
-            .statechart_namespace
-            .clone();
+        let room = smol::block_on(async {
+            let namespaces = app_state_statechart
+                .socketio_setup
+                .namespaces
+                .read()
+                .await;
+            namespaces.statechart_namespace.clone()
+        });
 
         let room_clone = room.clone();
         socket.on("loadStateMachine", move |socket: SocketRef, msg| {
