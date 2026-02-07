@@ -10,6 +10,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { StateNode } from "./StateNode";
 import { PropertiesPanel } from "./PropertiesPanel";
+import { ActionMappingsEditor } from "./ActionMappingsEditor";
 import { useStateChart } from "./hooks/useStateChart";
 import { useStateMachineSocket } from "./hooks/useStateMachineSocket";
 import { StateChartNode, StateChartEdge } from "./types";
@@ -23,6 +24,7 @@ import {
   PlayCircle,
   StopCircle,
   LayoutGrid,
+  Settings,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +61,8 @@ export const StateChartEditor: React.FC = () => {
     exportToXState,
     importFromXState,
     setNodes,
+    actionMappings,
+    setActionMappings,
   } = useStateChart();
 
   // Get list of machines from main namespace
@@ -71,6 +75,7 @@ export const StateChartEditor: React.FC = () => {
   const [selectedEdge, setSelectedEdge] = useState<StateChartEdge | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [autoSimulate, setAutoSimulate] = useState(false);
+  const [showActionMappings, setShowActionMappings] = useState(false);
 
   // Connect to machine-specific or global statechart namespace
   const {
@@ -294,6 +299,14 @@ export const StateChartEditor: React.FC = () => {
                 <LayoutGrid className="h-4 w-4 mr-1" />
                 Auto Layout
               </Button>
+              <Button 
+                size="sm" 
+                onClick={() => setShowActionMappings(!showActionMappings)} 
+                variant={showActionMappings ? "default" : "outline"}
+              >
+                <Settings className="h-4 w-4 mr-1" />
+                Actions
+              </Button>
               <Separator orientation="vertical" className="h-8" />
               <Select 
                 value={selectedMachine ? `${selectedMachine.machine_identification.vendor}/${selectedMachine.machine_identification.machine}/${selectedMachine.serial}` : "global"} 
@@ -444,12 +457,19 @@ export const StateChartEditor: React.FC = () => {
       </div>
 
       <div className="w-80 border-l bg-muted/40 overflow-y-auto">
-        <PropertiesPanel
-          selectedNode={selectedNode}
-          selectedEdge={selectedEdge}
-          onUpdateNode={updateNodeData}
-          onUpdateEdge={updateEdgeData}
-        />
+        {showActionMappings ? (
+          <ActionMappingsEditor
+            mappings={actionMappings || {}}
+            onChange={setActionMappings}
+          />
+        ) : (
+          <PropertiesPanel
+            selectedNode={selectedNode}
+            selectedEdge={selectedEdge}
+            onUpdateNode={updateNodeData}
+            onUpdateEdge={updateEdgeData}
+          />
+        )}
       </div>
     </div>
   );

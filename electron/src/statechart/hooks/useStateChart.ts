@@ -310,5 +310,7 @@ export const useStateChart = () => {
     exportToXState,
     importFromXState,
     setNodes,
+    actionMappings,
+    setActionMappings,
   };
 };
