@@ -1,6 +1,32 @@
 {
   "id": "traffic-light",
   "initial": "Red",
+  "actionMappings": {
+    "activateRedLight": {
+      "action": "SetLed",
+      "value": {"index": 0, "on": true}
+    },
+    "deactivateRedLight": {
+      "action": "SetLed",
+      "value": {"index": 0, "on": false}
+    },
+    "activateYellowLight": {
+      "action": "SetLed",
+      "value": {"index": 1, "on": true}
+    },
+    "deactivateYellowLight": {
+      "action": "SetLed",
+      "value": {"index": 1, "on": false}
+    },
+    "activateGreenLight": {
+      "action": "SetLed",
+      "value": {"index": 2, "on": true}
+    },
+    "deactivateGreenLight": {
+      "action": "SetLed",
+      "value": {"index": 2, "on": false}
+    }
+  },
   "states": {
     "Red": {
       "entry": ["activateRedLight"],

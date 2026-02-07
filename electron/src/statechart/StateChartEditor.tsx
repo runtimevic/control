@@ -28,6 +28,15 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useMainNamespace } from "@/client/mainNamespace";
+import type { MachineIdentificationUnique } from "@/machines/types";
 
 const nodeTypes = {
   stateNode: StateNode,
@@ -52,6 +61,18 @@ export const StateChartEditor: React.FC = () => {
     setNodes,
   } = useStateChart();
 
+  // Get list of machines from main namespace
+  const mainStore = useMainNamespace();
+  const machines = mainStore.machines?.data?.machines || [];
+
+  // 2. useState hooks
+  const [selectedMachine, setSelectedMachine] = useState<MachineIdentificationUnique | null>(null);
+  const [selectedNode, setSelectedNode] = useState<StateChartNode | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<StateChartEdge | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [autoSimulate, setAutoSimulate] = useState(false);
+
+  // Connect to machine-specific or global statechart namespace
   const {
     isConnected,
     loadMachine,
@@ -60,21 +81,27 @@ export const StateChartEditor: React.FC = () => {
     previousState,
     availableEvents,
     loadError,
-  } = useStateMachineSocket();
-
-  // 2. useState hooks
-  const [selectedNode, setSelectedNode] = useState<StateChartNode | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<StateChartEdge | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [autoSimulate, setAutoSimulate] = useState(false);
+  } = useStateMachineSocket(selectedMachine);
 
   // 3. useEffect hooks
   // Auto-simulate: Send first available event every 2 seconds
   useEffect(() => {
-    if (!autoSimulate || !isRunning || availableEvents.length === 0) {
+    if (!autoSimulate) {
+      console.log("[Auto-Simulate] Disabled");
+      return;
+    }
+    
+    if (!isRunning) {
+      console.log("[Auto-Simulate] Not running - click 'Run in Backend' first");
+      return;
+    }
+    
+    if (availableEvents.length === 0) {
+      console.log("[Auto-Simulate] No available events");
       return;
     }
 
+    console.log(`[Auto-Simulate] Starting with events:`, availableEvents);
     const intervalId = setInterval(() => {
       if (availableEvents.length > 0) {
         const nextEvent = availableEvents[0];
@@ -109,6 +136,17 @@ export const StateChartEditor: React.FC = () => {
       }))
     );
   }, [currentState, isRunning, setNodes]);
+
+  // Monitor available events for debugging
+  useEffect(() => {
+    console.log("[StateChart] State updated:", {
+      isRunning,
+      autoSimulate,
+      currentState,
+      availableEvents,
+      isConnected,
+    });
+  }, [isRunning, autoSimulate, currentState, availableEvents, isConnected]);
 
   // 4. useCallback hooks
   const handleNodeClick = useCallback(
@@ -205,9 +243,12 @@ export const StateChartEditor: React.FC = () => {
   const handleRun = useCallback(() => {
     const xstateConfig = exportToXState();
     console.log("[StateChart] Loading state machine into backend:", xstateConfig);
+    console.log("[StateChart] Selected machine:", selectedMachine);
+    console.log("[StateChart] Auto-simulate:", autoSimulate);
     loadMachine(xstateConfig);
     setIsRunning(true);
-  }, [exportToXState, loadMachine]);
+    console.log("[StateChart] isRunning set to true");
+  }, [exportToXState, loadMachine, selectedMachine, autoSimulate]);
 
   return (
     <div className="flex h-full">
@@ -254,6 +295,40 @@ export const StateChartEditor: React.FC = () => {
                 Auto Layout
               </Button>
               <Separator orientation="vertical" className="h-8" />
+              <Select 
+                value={selectedMachine ? `${selectedMachine.machine_identification.vendor}/${selectedMachine.machine_identification.machine}/${selectedMachine.serial}` : "global"} 
+                onValueChange={(value) => {
+                  if (value === "global") {
+                    setSelectedMachine(null);
+                  } else {
+                    const [vendor, machine, serial] = value.split('/').map(Number);
+                    setSelectedMachine({ 
+                      machine_identification: { vendor, machine }, 
+                      serial 
+                    });
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[200px] h-8">
+                  <SelectValue placeholder="Select machine..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Global (Testing)</SelectItem>
+                  {machines.map((m) => {
+                    const mid = m.machine_identification_unique;
+                    const vendor = mid.machine_identification.vendor;
+                    const machine = mid.machine_identification.machine;
+                    const serial = mid.serial;
+                    const key = `${vendor}/${machine}/${serial}`;
+                    return (
+                      <SelectItem key={key} value={key}>
+                        Machine {vendor}/{machine}/{serial}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              <Separator orientation="vertical" className="h-8" />
               {!isRunning ? (
                 <Button 
                   size="sm" 
@@ -284,7 +359,7 @@ export const StateChartEditor: React.FC = () => {
           </Panel>
 
           {/* Execution State Panel */}
-          {isRunning && currentState && (
+          {isRunning && (
             <Panel position="top-right" className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-lg shadow-lg border p-3">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -299,53 +374,60 @@ export const StateChartEditor: React.FC = () => {
                     Stop
                   </Button>
                 </div>
-                <div className="text-xs space-y-1">
-                  <div>
-                    <span className="text-muted-foreground">Current:</span>{" "}
-                    <Badge variant="default">{currentState}</Badge>
-                  </div>
-                  {previousState && (
+                {currentState ? (
+                  <div className="text-xs space-y-1">
                     <div>
-                      <span className="text-muted-foreground">Previous:</span>{" "}
-                      <span className="font-mono">{previousState}</span>
+                      <span className="text-muted-foreground">Current:</span>{" "}
+                      <Badge variant="default">{currentState}</Badge>
                     </div>
-                  )}
-                  <div>
-                    <span className="text-muted-foreground">Available Events:</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {availableEvents.map((event) => (
-                      <Button
-                        key={event}
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSendEvent(event)}
-                        className="h-7 px-2 text-xs"
-                      >
-                        {event}
-                      </Button>
-                    ))}
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="auto-simulate"
-                      checked={autoSimulate}
-                      onCheckedChange={(checked) => setAutoSimulate(checked === true)}
-                    />
-                    <Label
-                      htmlFor="auto-simulate"
-                      className="text-xs font-normal cursor-pointer"
-                    >
-                      Auto-simulate (2s interval)
-                    </Label>
-                  </div>
-                  {autoSimulate && (
-                    <div className="text-xs text-muted-foreground pt-1 border-t">
-                      💡 Click Stop button or uncheck above to pause
+                    {previousState && (
+                      <div>
+                        <span className="text-muted-foreground">Previous:</span>{" "}
+                        <span className="font-mono">{previousState}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-muted-foreground">Available Events:</span>
                     </div>
-                  )}
+                    <div className="flex flex-wrap gap-1">
+                      {availableEvents.map((event) => (
+                        <Button
+                          key={event}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSendEvent(event)}
+                          className="h-7 px-2 text-xs"
+                        >
+                          {event}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    Loading state machine...
+                  </div>
+                )}
+                <Separator className="my-2" />
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="auto-simulate"
+                    checked={autoSimulate}
+                    onCheckedChange={(checked) => setAutoSimulate(checked === true)}
+                    disabled={!currentState || availableEvents.length === 0}
+                  />
+                  <Label
+                    htmlFor="auto-simulate"
+                    className="text-xs font-normal cursor-pointer"
+                  >
+                    Auto-simulate (2s interval)
+                  </Label>
                 </div>
+                {autoSimulate && (
+                  <div className="text-xs text-muted-foreground pt-1 border-t">
+                    💡 Click Stop button or uncheck above to pause
+                  </div>
+                )}
               </div>
             </Panel>
           )}

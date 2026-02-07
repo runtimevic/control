@@ -1,13 +1,15 @@
 use super::{main_namespace::MainRoom, namespace_id::NamespaceId, statechart_namespace::StateChartRoom};
 use control_core::socketio::event::GenericEvent;
+use machines::machine_identification::MachineIdentificationUnique;
 use smol::channel::Sender;
 use socketioxide::extract::SocketRef;
 use std::{collections::HashMap, sync::Arc};
 
 pub struct Namespaces {
     pub main_namespace: MainRoom,
-    pub statechart_namespace: StateChartRoom,
+    pub statechart_namespace: StateChartRoom, // Global statechart (para pruebas sin máquina)
     pub machine_namespaces: HashMap<NamespaceId, control_core::socketio::namespace::Namespace>,
+    pub machine_statechart_rooms: Arc<smol::lock::RwLock<HashMap<MachineIdentificationUnique, StateChartRoom>>>,
 }
 
 impl Namespaces {
@@ -19,6 +21,9 @@ impl Namespaces {
             NamespaceId::Main => Ok(&mut self.main_namespace.namespace),
             NamespaceId::StateChart => {
                 return Err(anyhow::anyhow!("StateChart namespace does not use generic namespace"));
+            }
+            NamespaceId::MachineStateChart(_) => {
+                return Err(anyhow::anyhow!("MachineStateChart namespace does not use generic namespace"));
             }
             NamespaceId::Machine(_) => {
                 let res = self.machine_namespaces.get_mut(&namespace_id);
@@ -36,6 +41,7 @@ impl Namespaces {
             main_namespace: MainRoom::new(socket_queue_tx),
             statechart_namespace: StateChartRoom::new(),
             machine_namespaces: HashMap::new(),
+            machine_statechart_rooms: Arc::new(smol::lock::RwLock::new(HashMap::new())),
         }
     }
 }

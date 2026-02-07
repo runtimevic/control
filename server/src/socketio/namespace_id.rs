@@ -10,6 +10,7 @@ pub enum NamespaceId {
     Main,
     Machine(MachineIdentificationUnique),
     StateChart,
+    MachineStateChart(MachineIdentificationUnique),
 }
 
 impl Serialize for NamespaceId {
@@ -23,6 +24,13 @@ impl Serialize for NamespaceId {
             Self::Machine(id) => {
                 let path = format!(
                     "/machine/{}/{}/{}",
+                    id.machine_identification.vendor, id.machine_identification.machine, id.serial
+                );
+                serializer.serialize_str(&path)
+            }
+            Self::MachineStateChart(id) => {
+                let path = format!(
+                    "/machine/{}/{}/{}/statechart",
                     id.machine_identification.vendor, id.machine_identification.machine, id.serial
                 );
                 serializer.serialize_str(&path)
@@ -59,6 +67,26 @@ impl<'de> Deserialize<'de> for NamespaceId {
 
                 if let Some(machine_path) = value.strip_prefix("/machine/") {
                     let parts: Vec<&str> = machine_path.split('/').collect();
+                    
+                    // Check for /machine/{vendor}/{machine}/{serial}/statechart
+                    if parts.len() == 4 && parts[3] == "statechart" {
+                        let vendor = parts[0]
+                            .parse::<u16>()
+                            .map_err(|_| E::custom("Invalid vendor id"))?;
+                        let machine = parts[1]
+                            .parse::<u16>()
+                            .map_err(|_| E::custom("Invalid machine id"))?;
+                        let serial = parts[2]
+                            .parse::<u16>()
+                            .map_err(|_| E::custom("Invalid serial id"))?;
+
+                        return Ok(NamespaceId::MachineStateChart(MachineIdentificationUnique {
+                            machine_identification: MachineIdentification { vendor, machine },
+                            serial,
+                        }));
+                    }
+                    
+                    // Check for /machine/{vendor}/{machine}/{serial}
                     if parts.len() == 3 {
                         let vendor = parts[0]
                             .parse::<u16>()
@@ -93,9 +121,33 @@ impl FromStr for NamespaceId {
         if s == "/main" {
             return Ok(Self::Main);
         }
+        
+        if s == "/statechart" {
+            return Ok(Self::StateChart);
+        }
 
         if let Some(machine_path) = s.strip_prefix("/machine/") {
             let parts: Vec<&str> = machine_path.split('/').collect();
+            
+            // Check for /machine/{vendor}/{machine}/{serial}/statechart
+            if parts.len() == 4 && parts[3] == "statechart" {
+                let vendor = parts[0]
+                    .parse::<u16>()
+                    .map_err(|_| "Invalid vendor id".to_string())?;
+                let machine = parts[1]
+                    .parse::<u16>()
+                    .map_err(|_| "Invalid machine id".to_string())?;
+                let serial = parts[2]
+                    .parse::<u16>()
+                    .map_err(|_| "Invalid serial id".to_string())?;
+
+                return Ok(Self::MachineStateChart(MachineIdentificationUnique {
+                    machine_identification: MachineIdentification { vendor, machine },
+                    serial,
+                }));
+            }
+            
+            // Check for /machine/{vendor}/{machine}/{serial}
             if parts.len() == 3 {
                 let vendor = parts[0]
                     .parse::<u16>()
@@ -128,6 +180,13 @@ impl fmt::Display for NamespaceId {
                 write!(
                     f,
                     "/machine/{}/{}/{}",
+                    id.machine_identification.vendor, id.machine_identification.machine, id.serial
+                )
+            }
+            Self::MachineStateChart(id) => {
+                write!(
+                    f,
+                    "/machine/{}/{}/{}/statechart",
                     id.machine_identification.vendor, id.machine_identification.machine, id.serial
                 )
             }

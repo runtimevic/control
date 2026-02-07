@@ -14,6 +14,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info, instrument, warn};
+use machines::machine_identification::MachineIdentificationUnique;
+use machines::{MachineMessage};
+use smol::channel::Sender;
 
 pub mod hardware_actions;
 
@@ -21,6 +24,8 @@ pub mod hardware_actions;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoadStateMachineMessage {
     pub config: String, // XState JSON as string
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub machine_id: Option<MachineIdentificationUnique>, // Target machine for hardware actions
 }
 
 /// Message to send an event to the state machine
@@ -42,13 +47,21 @@ pub struct LoadStateMachineResponse {
 pub struct StateChartRoom {
     /// Active state machines indexed by socket ID
     machines: Arc<smol::lock::Mutex<HashMap<String, StateMachine>>>,
+    /// API senders for machines (indexed by MachineIdentificationUnique)
+    api_senders: Arc<smol::lock::RwLock<HashMap<MachineIdentificationUnique, Sender<MachineMessage>>>>,
 }
 
 impl StateChartRoom {
     pub fn new() -> Self {
         Self {
             machines: Arc::new(smol::lock::Mutex::new(HashMap::new())),
+            api_senders: Arc::new(smol::lock::RwLock::new(HashMap::new())),
         }
+    }
+
+    /// Set the API senders for machines
+    pub async fn set_api_senders(&self, senders: HashMap<MachineIdentificationUnique, Sender<MachineMessage>>) {
+        *self.api_senders.write().await = senders;
     }
 
     /// Helper to emit events in the standard format
@@ -79,14 +92,50 @@ impl StateChartRoom {
         Data(msg): Data<LoadStateMachineMessage>,
     ) {
         let socket_id = socket.id.to_string();
-        info!("Loading state machine for socket {}", socket_id);
+        info!("Loading state machine for socket {} with machine_id {:?}", socket_id, msg.machine_id);
 
         match StateMachine::from_json(&msg.config) {
             Ok(mut machine) => {
                 info!("Successfully parsed state machine");
                 
-                // Register hardware-specific actions and guards
-                hardware_actions::register_actions(machine.actions_mut());
+                // Register hardware-specific actions based on actionMappings
+                if let Some(machine_id) = &msg.machine_id {
+                    // Get API sender for this machine
+                    let api_senders = self.api_senders.read().await;
+                    if let Some(api_sender) = api_senders.get(machine_id) {
+                        // Get action mappings from config and clone them
+                        if let Some(mappings) = machine.config().action_mappings.clone() {
+                            info!("Registering {} action mappings for machine {:?}", mappings.len(), machine_id);
+                            let api_sender_clone = api_sender.clone();
+                            let machine_id_clone = machine_id.clone();
+                            drop(api_senders); // Release read lock
+                            
+                            for (action_name, mutation_json) in mappings {
+                                tracing::info!(
+                                    "[StateMachine] Registering action '{}' -> mutation: {:?}",
+                                    action_name,
+                                    mutation_json
+                                );
+                                let action = Arc::new(hardware_actions::MachineApiAction::new(
+                                    action_name.clone(),
+                                    machine_id_clone.clone(),
+                                    mutation_json.clone(),
+                                    api_sender_clone.clone(),
+                                ));
+                                machine.actions_mut().register(action);
+                            }
+                        } else {
+                            warn!("No actionMappings found in state machine config");
+                        }
+                    } else {
+                        error!("Machine {:?} not found in API senders", machine_id);
+                    }
+                } else {
+                    // No machine_id: register mock actions for testing
+                    info!("No machine_id provided, registering mock hardware actions");
+                    hardware_actions::register_actions(machine.actions_mut());
+                }
+                
                 hardware_actions::register_guards(machine.guards_mut());
 
                 let exec_state = machine.execution_state();

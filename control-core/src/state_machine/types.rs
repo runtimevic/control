@@ -10,6 +10,10 @@ pub struct StateMachineConfig {
     pub initial: String,
     /// Mapa de estados
     pub states: HashMap<String, StateConfig>,
+    /// Mapeo de acciones genéricas a mutaciones específicas de máquina
+    /// Ejemplo: {"activateRedLight": {"action": "SetLed", "value": {"index": 0, "on": true}}}
+    #[serde(skip_serializing_if = "Option::is_none", rename = "actionMappings")]
+    pub action_mappings: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Configuración de un estado individual
@@ -86,6 +90,7 @@ impl TransitionConfig {
 
 /// Estado de ejecución actual de la máquina
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecutionState {
     /// Estado actual
     pub current_state: String,

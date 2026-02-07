@@ -28,7 +28,7 @@ pub enum TestEL2008MachineEvents {
     State(Event<StateEvent>),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(tag = "action", content = "value")]
 pub enum Mutation {
     SetLed { index: usize, on: bool },
@@ -73,32 +73,43 @@ impl MachineApi for TestEL2008Machine {
     }
 
     fn api_mutate(&mut self, request_body: Value) -> Result<(), anyhow::Error> {
+        tracing::info!("[test_el2008_machine] api_mutate called with: {:?}", request_body);
         let mutation: Mutation = serde_json::from_value(request_body)?;
+        tracing::info!("[test_el2008_machine] Parsed mutation: {:?}", mutation);
         match mutation {
             Mutation::SetLed { index, on } => {
+                tracing::info!("[test_el2008_machine] Setting LED {} to {}", index, on);
                 self.set_led(index, on);
             }
             Mutation::SetAllLeds { on } => {
+                tracing::info!("[test_el2008_machine] Setting all LEDs to {}", on);
                 self.set_all_leds(on);
             }
             Mutation::SetMode { mode } => {
+                tracing::info!("[test_el2008_machine] Setting mode to {:?}", mode);
                 self.set_mode(mode);
             }
             Mutation::Start => {
+                tracing::info!("[test_el2008_machine] Starting machine");
                 self.start();
             }
             Mutation::Stop => {
+                tracing::info!("[test_el2008_machine] Stopping machine");
                 self.stop();
             }
             Mutation::Reset => {
+                tracing::info!("[test_el2008_machine] Resetting machine");
                 self.reset();
             }
             Mutation::SetAutomaticDelay { delay_ms } => {
+                tracing::info!("[test_el2008_machine] Setting automatic delay to {}ms", delay_ms);
                 self.set_automatic_delay(delay_ms);
             }
         }
 
+        tracing::info!("[test_el2008_machine] Applying outputs to hardware");
         self.apply_outputs();
+        tracing::info!("[test_el2008_machine] Outputs applied successfully");
 
         Ok(())
     }

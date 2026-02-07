@@ -30,6 +30,9 @@ export const useStateChart = () => {
   ]);
 
   const [edges, setEdges] = useState<StateChartEdge[]>([]);
+  
+  // Store action mappings separately since they're not part of the visual graph
+  const [actionMappings, setActionMappings] = useState<XStateConfig["actionMappings"]>(undefined);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -191,14 +194,24 @@ export const useStateChart = () => {
       states[node.data.label] = stateConfig;
     });
 
-    return {
+    const config: XStateConfig = {
       id: "machine",
       initial: initialNode?.data.label || nodes[0]?.data.label,
       states,
     };
-  }, [nodes, edges]);
+    
+    // Include actionMappings if they exist
+    if (actionMappings) {
+      config.actionMappings = actionMappings;
+    }
+    
+    return config;
+  }, [nodes, edges, actionMappings]);
 
   const importFromXState = useCallback((config: XStateConfig) => {
+    // Store action mappings
+    setActionMappings(config.actionMappings);
+    
     const newNodes: StateChartNode[] = [];
     const newEdges: StateChartEdge[] = [];
     let nodeIdCounter = 1;

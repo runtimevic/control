@@ -26,8 +26,13 @@ impl MachineAct for TestEL2008Machine {
             }
             MachineMessage::UnsubscribeNamespace => self.namespace.namespace = None,
             MachineMessage::HttpApiJsonRequest(value) => {
+                tracing::info!("[test_el2008_machine] Received HttpApiJsonRequest: {:?}", value);
                 use crate::MachineApi;
-                let _res = self.api_mutate(value);
+                let res = self.api_mutate(value.clone());
+                match res {
+                    Ok(_) => tracing::info!("[test_el2008_machine] Successfully executed mutation: {:?}", value),
+                    Err(e) => tracing::error!("[test_el2008_machine] Failed to execute mutation: {:?}, error: {:?}", value, e),
+                }
             }
             MachineMessage::ConnectToMachine(_machine_connection) => {
                 // Does not connect to any Machine; do nothing

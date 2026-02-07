@@ -82,6 +82,11 @@ impl StateMachine {
         &self.context
     }
 
+    /// Obtiene la configuración (inmutable)
+    pub fn config(&self) -> &StateMachineConfig {
+        &self.config
+    }
+
     /// Obtiene el estado actual
     pub fn current_state(&self) -> &str {
         &self.current_state

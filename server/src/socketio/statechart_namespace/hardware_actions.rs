@@ -6,6 +6,59 @@
 use control_core::state_machine::{Action, ActionRegistry, Guard, GuardRegistry, MachineContext};
 use anyhow::Result;
 use std::sync::Arc;
+use smol::channel::Sender;
+use machines::MachineMessage;
+use machines::machine_identification::MachineIdentificationUnique;
+
+/// Action that invokes a machine's API mutation
+pub struct MachineApiAction {
+    name: String,
+    machine_id: MachineIdentificationUnique,
+    mutation_json: serde_json::Value,
+    api_sender: Sender<MachineMessage>,
+}
+
+impl MachineApiAction {
+    pub fn new(
+        name: impl Into<String>,
+        machine_id: MachineIdentificationUnique,
+        mutation_json: serde_json::Value,
+        api_sender: Sender<MachineMessage>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            machine_id,
+            mutation_json,
+            api_sender,
+        }
+    }
+}
+
+impl Action for MachineApiAction {
+    fn execute(&self, _context: &mut MachineContext) -> Result<()> {
+        tracing::info!(
+            "[StateMachine] Executing {} for machine {:?} with mutation: {:?}",
+            self.name,
+            self.machine_id,
+            self.mutation_json
+        );
+        
+        // Send HTTP API request to machine
+        let msg = MachineMessage::HttpApiJsonRequest(self.mutation_json.clone());
+        
+        // Non-blocking send
+        if let Err(e) = self.api_sender.try_send(msg) {
+            tracing::error!("Failed to send API request to machine: {:?}", e);
+            return Err(anyhow::anyhow!("Failed to send API request: {}", e));
+        }
+        
+        Ok(())
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 /// Example action: Log a message
 pub struct LogHardwareAction {

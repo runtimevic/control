@@ -1,7 +1,8 @@
 use super::namespace_id::NamespaceId;
+use super::statechart_namespace::LoadStateMachineMessage;
 use crate::app_state::SharedState;
 use socketioxide::ParserConfig;
-use socketioxide::extract::SocketRef;
+use socketioxide::extract::{Data, SocketRef, TryData};
 use socketioxide::layer::SocketIoLayer;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -33,12 +34,24 @@ pub async fn init_socketio(app_state: Arc<SharedState>) -> SocketIoLayer {
         tracing::error!("Failed to detect machine namespace: {}", err);
     }
 
+    // Clone app_state for machine statechart namespaces
+    let app_state_machine_statechart = app_state.clone();
+
+    if let Err(err) = io.dyn_ns(
+        "/machine/{vendor}/{machine}/{serial}/statechart",
+        move |socket: SocketRef| {
+            handle_machine_statechart_connection(socket, app_state_machine_statechart.clone());
+        },
+    ) {
+        tracing::error!("Failed to detect machine statechart namespace: {}", err);
+    }
+
     // Clone app_state for statechart namespace
     let app_state_statechart = app_state.clone();
 
     // Setup /statechart namespace for state machine visualization
     io.ns("/statechart", move |socket: SocketRef| {
-        tracing::info!("Socket connected to /statechart: {:?}", socket.id);
+        tracing::info!("🔵 Socket connected to /statechart: {:?}", socket.id);
 
         let room = smol::block_on(async {
             let namespaces = app_state_statechart
@@ -46,20 +59,40 @@ pub async fn init_socketio(app_state: Arc<SharedState>) -> SocketIoLayer {
                 .namespaces
                 .read()
                 .await;
-            namespaces.statechart_namespace.clone()
+            let room = namespaces.statechart_namespace.clone();
+            
+            // Update API senders for global statechart namespace
+            let api_machines = app_state_statechart.api_machines.lock().await;
+            room.set_api_senders(api_machines.clone()).await;
+            drop(api_machines);
+            
+            room
         });
 
+        tracing::info!("📝 Registering loadStateMachine handler for socket {:?}", socket.id);
+        
         let room_clone = room.clone();
-        socket.on("loadStateMachine", move |socket: SocketRef, msg| {
-            let room = room_clone.clone();
-            smol::spawn(async move {
-                room.on_load_state_machine(socket, msg).await;
-            })
-            .detach();
+        socket.on("loadStateMachine", move |socket: SocketRef, TryData(res): TryData<LoadStateMachineMessage>| {
+            tracing::info!("🟡 loadStateMachine event received");
+            match res {
+                Ok(msg) => {
+                    tracing::info!("✅ Parsed loadStateMachine: config_len={}, machine_id={:?}", 
+                        msg.config.len(), msg.machine_id);
+                    let room = room_clone.clone();
+                    smol::spawn(async move {
+                        room.on_load_state_machine(socket, Data(msg)).await;
+                    })
+                    .detach();
+                }
+                Err(e) => {
+                    tracing::error!("❌ Error extracting loadStateMachine message: {:?}", e);
+                }
+            }
         });
 
         let room_clone = room.clone();
         socket.on("sendEvent", move |socket: SocketRef, msg| {
+            tracing::info!("Received sendEvent message");
             let room = room_clone.clone();
             smol::spawn(async move {
                 room.on_send_event(socket, msg).await;
@@ -213,4 +246,99 @@ fn setup_connection(socket: SocketRef, namespace_id: NamespaceId, app_state: Arc
         socket.id,
         namespace_id,
     );
+}
+
+fn handle_machine_statechart_connection(socket: SocketRef, app_state: Arc<SharedState>) {
+    let namespace_path = socket.ns();
+   
+    let namespace_id = match NamespaceId::from_str(namespace_path) {
+        Ok(namespace_id) => namespace_id,
+        Err(err) => {
+            tracing::error!("Failed to parse MachineStateChart NamespaceId: {}", err);
+            return;
+        }
+    };
+
+    let machine_id = match namespace_id {
+        NamespaceId::MachineStateChart(id) => id,
+        _ => {
+            tracing::error!("Expected MachineStateChart namespace, got: {}", namespace_id);
+            return;
+        }
+    };
+
+    tracing::info!(
+        "Socket connected to machine statechart: socket={:?} machine={:?}",
+        socket.id,
+        machine_id
+    );
+
+    // Get or create StateChartRoom for this machine
+    let room = smol::block_on(async {
+        // Clone the Arc to avoid borrowing issues
+        let machine_rooms_arc = {
+            let namespaces = app_state
+                .socketio_setup
+                .namespaces
+                .read()
+                .await;
+            namespaces.machine_statechart_rooms.clone()
+        };
+
+        let mut rooms = machine_rooms_arc.write().await;
+
+        let room = rooms
+            .entry(machine_id.clone())
+            .or_insert_with(|| {
+                tracing::info!("Creating new StateChartRoom for machine: {:?}", machine_id);
+                super::statechart_namespace::StateChartRoom::new()
+            })
+            .clone();
+
+        // Update API senders in the room
+        let api_machines = app_state.api_machines.lock().await;
+        room.set_api_senders(api_machines.clone()).await;
+        drop(api_machines);
+
+        room
+    });
+
+    // Setup handlers
+    let room_clone = room.clone();
+    socket.on("loadStateMachine", move |socket: SocketRef, TryData(res): TryData<LoadStateMachineMessage>| {
+        tracing::info!("🟡 loadStateMachine event received for machine");
+        match res {
+            Ok(msg) => {
+                tracing::info!("✅ Parsed loadStateMachine for machine: config_len={}, machine_id={:?}", 
+                    msg.config.len(), msg.machine_id);
+                let room = room_clone.clone();
+                smol::spawn(async move {
+                    room.on_load_state_machine(socket, Data(msg)).await;
+                })
+                .detach();
+            }
+            Err(e) => {
+                tracing::error!("❌ Error extracting loadStateMachine for machine: {:?}", e);
+            }
+        }
+    });
+
+    let room_clone = room.clone();
+    socket.on("sendEvent", move |socket: SocketRef, msg| {
+        tracing::info!("Received sendEvent message for machine");
+        let room = room_clone.clone();
+        smol::spawn(async move {
+            room.on_send_event(socket, msg).await;
+        })
+        .detach();
+    });
+
+    let room_clone = room.clone();
+    socket.on_disconnect(move |socket: SocketRef| {
+        let room = room_clone.clone();
+        smol::spawn(async move {
+            room.on_disconnect(socket).await;
+        })
+        .detach();
+    });
 }

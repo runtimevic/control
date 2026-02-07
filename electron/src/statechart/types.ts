@@ -36,6 +36,10 @@ export interface XStateConfig {
   id: string;
   initial?: string;
   states: Record<string, XStateStateConfig>;
+  actionMappings?: Record<string, {
+    action: string;
+    value: any;
+  }>;
 }
 
 export interface XStateStateConfig {

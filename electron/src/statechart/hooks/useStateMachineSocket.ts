@@ -1,15 +1,15 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { 
-  createNamespaceHookImplementation, 
-  EventHandler,
   NamespaceId,
   useSocketioStore
 } from "@/client/socketioStore";
-import { create, StoreApi } from "zustand";
+import { create } from "zustand";
 import type { ExecutionState, XStateConfig } from "../types";
+import type { MachineIdentificationUnique } from "@/machines/types";
 
 interface LoadStateMachineMessage {
   config: string;
+  machine_id?: MachineIdentificationUnique;
 }
 
 interface SendEventMessage {
@@ -22,81 +22,129 @@ interface LoadStateMachineResponse {
   execution_state?: ExecutionState;
 }
 
-interface StateMachineStore {
-  executionState: ExecutionState | null;
-  loadError: string | null;
-}
-
-function createStateMachineStore(): StoreApi<StateMachineStore> {
-  return create<StateMachineStore>(() => ({
-    executionState: null,
-    loadError: null,
-  }));
-}
-
-function stateMachineMessageHandler(store: StoreApi<StateMachineStore>): EventHandler {
-  return (event: any) => {
-    const eventName = event.name;
-    
-    try {
-      if (eventName === "executionState") {
-        console.log("[StateChart] Received executionState:", event.data);
-        store.setState({ executionState: event.data });
-      } else if (eventName === "loadStateMachineResponse") {
-        const response = event.data as LoadStateMachineResponse;
-        console.log("[StateChart] Load response:", response);
-        if (!response.success) {
-          store.setState({ loadError: response.message });
-        } else {
-          store.setState({ 
-            loadError: null,
-            executionState: response.execution_state || null 
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`Error processing ${eventName} event:`, error);
-    }
-  };
-}
-
-const stateMachineStore = createStateMachineStore();
-const stateMachineImplementation = createNamespaceHookImplementation({
-  createStore: () => stateMachineStore,
-  createEventHandler: stateMachineMessageHandler,
-});
-
-function useStateMachineNamespace(): StateMachineStore {
-  const namespaceId = useRef({ type: "statechart" } satisfies NamespaceId);
-  return stateMachineImplementation(namespaceId.current);
-}
-
 /**
  * Hook for connecting to the /statechart Socket.IO namespace
  * Provides real-time state machine execution and visualization
+ * 
+ * @param machineId - Optional machine identification. If provided, connects to machine-specific namespace
  */
-export const useStateMachineSocket = () => {
-  const store = useStateMachineNamespace();
-  const namespaceId: NamespaceId = { type: "statechart" };
+export const useStateMachineSocket = (machineId?: MachineIdentificationUnique | null) => {
+  const namespaceId: NamespaceId = machineId 
+    ? { type: "machine-statechart", machine_identification_unique: machineId }
+    : { type: "statechart" };
   
-  // Track connection status with local state
+  console.log("[useStateMachineSocket] Creating hook with machineId:", machineId);
+  console.log("[useStateMachineSocket] NamespaceId:", namespaceId);
+  
+  const [executionState, setExecutionState] = useState<ExecutionState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const socketStore = useSocketioStore();
+  const { 
+    getNamespace,
+    hasNamespace,
+    initNamespace,
+    incrementNamespace,
+    decrementNamespace,
+  } = useSocketioStore();
+  
+  // Initialize namespace if needed
+  useEffect(() => {
+    console.log("[useStateMachineSocket] Initializing namespace:", namespaceId);
+    if (!hasNamespace(namespaceId)) {
+      console.log("[useStateMachineSocket] Namespace doesn't exist, creating it");
+      initNamespace(
+        namespaceId,
+        () => create(() => ({ executionState: null, loadError: null })),
+        () => () => {} // Empty event handler, we handle events manually below
+      );
+    } else {
+      incrementNamespace(namespaceId);
+    }
+    
+    return () => {
+      decrementNamespace(namespaceId);
+    };
+  }, [namespaceId, hasNamespace, initNamespace, incrementNamespace, decrementNamespace]);
+  
+  // Setup event listener for this namespace
+  useEffect(() => {
+    const namespace = getNamespace(namespaceId);
+    
+    if (!namespace?.socket) {
+      console.log("[StateChart] No socket available yet");
+      return;
+    }
+    
+    const socket = namespace.socket;
+    console.log("[StateChart] Setting up event listener, socket connected:", socket.connected);
+    
+    const handleEvent = (event: any) => {
+      try {
+        console.log("[StateChart] Raw event received:", event);
+        const eventName = event.name;
+        
+        if (eventName === "executionState") {
+          console.log("[StateChart] Received executionState:", event.data);
+          setExecutionState(event.data);
+        } else if (eventName === "loadStateMachineResponse") {
+          const response = event.data as LoadStateMachineResponse;
+          console.log("[StateChart] Load response:", response);
+          if (!response.success) {
+            setLoadError(response.message);
+          } else {
+            setLoadError(null);
+            if (response.execution_state) {
+              console.log("[StateChart] Setting execution state from response:", response.execution_state);
+              setExecutionState(response.execution_state);
+            }
+          }
+        } else {
+          console.log("[StateChart] Unknown event:", eventName);
+        }
+      } catch (error) {
+        console.error("Error processing event:", error);
+      }
+    };
+    
+    socket.on("event", handleEvent);
+    
+    return () => {
+      socket.off("event", handleEvent);
+    };
+  }, [namespaceId, getNamespace]);
   
   // Monitor socket connection status
   useEffect(() => {
-    const checkConnection = () => {
-      const namespace = socketStore.getNamespace(namespaceId);
-      const connected = namespace?.socket?.connected ?? false;
-      setIsConnected(connected);
+    const namespace = getNamespace(namespaceId);
+    
+    if (!namespace?.socket) {
+      setIsConnected(false);
+      return;
+    }
+    
+    const socket = namespace.socket;
+    
+    const updateConnectionStatus = () => {
+      setIsConnected(socket.connected);
+      console.log(`[StateChart] Connection status: ${socket.connected}`);
     };
     
-    // Check immediately and then poll for changes
-    checkConnection();
-    const intervalId = setInterval(checkConnection, 100);
+    // Set initial status
+    updateConnectionStatus();
     
-    return () => clearInterval(intervalId);
-  }, [socketStore, namespaceId]);
+    // Listen to connection events
+    socket.on("connect", updateConnectionStatus);
+    socket.on("disconnect", updateConnectionStatus);
+    
+    // Poll as backup in case events are missed
+    const intervalId = setInterval(updateConnectionStatus, 1000);
+    
+    return () => {
+      socket.off("connect", updateConnectionStatus);
+      socket.off("disconnect", updateConnectionStatus);
+      clearInterval(intervalId);
+    };
+  }, [namespaceId, getNamespace]);
 
   /**
    * Load a state machine configuration into the backend
@@ -104,17 +152,28 @@ export const useStateMachineSocket = () => {
   const loadMachine = useCallback(
     (config: XStateConfig) => {
       const json = JSON.stringify(config);
-      console.log("[StateChart] Loading state machine:", config.id);
+      console.log("[StateChart] Loading state machine:", config.id, "for machine:", machineId);
+      console.log("[StateChart] Config JSON length:", json.length);
       
-      const socketStore = useSocketioStore.getState();
-      const namespace = socketStore.getNamespace(namespaceId);
+      const namespace = getNamespace(namespaceId);
       if (namespace?.socket) {
-        namespace.socket.emit("loadStateMachine", { config: json } as LoadStateMachineMessage);
+        console.log("[StateChart] Socket status:", {
+          connected: namespace.socket.connected,
+          disconnected: namespace.socket.disconnected,
+        });
+        const message: LoadStateMachineMessage = {
+          config: json,
+          ...(machineId ? { machine_id: machineId } : {}),
+        };
+        
+        console.log("[StateChart] Emitting loadStateMachine message:", message);
+        namespace.socket.emit("loadStateMachine", message);
+        console.log("[StateChart] Message emitted, waiting for response...");
       } else {
-        console.error("[StateChart] Socket not connected");
+        console.error("[StateChart] Socket not connected - namespace:", namespaceId);
       }
     },
-    [namespaceId]
+    [namespaceId, machineId, getNamespace]
   );
 
   /**
@@ -124,31 +183,30 @@ export const useStateMachineSocket = () => {
     (event: string) => {
       console.log("[StateChart] Sending event:", event);
       
-      const socketStore = useSocketioStore.getState();
-      const namespace = socketStore.getNamespace(namespaceId);
+      const namespace = getNamespace(namespaceId);
       if (namespace?.socket) {
         namespace.socket.emit("sendEvent", { event } as SendEventMessage);
       } else {
         console.error("[StateChart] Socket not connected");
       }
     },
-    [namespaceId]
+    [namespaceId, getNamespace]
   );
 
   /**
    * Get available events from current state
    */
-  const availableEvents = store.executionState?.available_events || [];
+  const availableEvents = executionState?.availableEvents || [];
 
   /**
    * Get current state name
    */
-  const currentState = store.executionState?.current_state;
+  const currentState = executionState?.currentState;
 
   /**
    * Get previous state name
    */
-  const previousState = store.executionState?.previous_state;
+  const previousState = executionState?.previousState;
 
   return {
     // Connection status (from real-time socket state)
@@ -159,12 +217,12 @@ export const useStateMachineSocket = () => {
     sendEvent,
     
     // Execution state
-    executionState: store.executionState,
+    executionState,
     currentState,
     previousState,
     availableEvents,
     
     // Error handling
-    loadError: store.loadError,
+    loadError,
   };
 };

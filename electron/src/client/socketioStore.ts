@@ -156,6 +156,10 @@ export type NamespaceId =
   | {
       type: "machine";
       machine_identification_unique: MachineIdentificationUnique;
+    }
+  | {
+      type: "machine-statechart";
+      machine_identification_unique: MachineIdentificationUnique;
     };
 
 /**
@@ -210,6 +214,8 @@ export function serializeNamespaceId(namespaceId: NamespaceId): string {
     return "/statechart";
   } else if (namespaceId.type === "machine") {
     return `/machine/${namespaceId.machine_identification_unique.machine_identification.vendor}/${namespaceId.machine_identification_unique.machine_identification.machine}/${namespaceId.machine_identification_unique.serial}`;
+  } else if (namespaceId.type === "machine-statechart") {
+    return `/machine/${namespaceId.machine_identification_unique.machine_identification.vendor}/${namespaceId.machine_identification_unique.machine_identification.machine}/${namespaceId.machine_identification_unique.serial}/statechart`;
   } else {
     throw new Error("Invalid namespaceId");
   }
@@ -228,11 +234,29 @@ export function deserializeNamespaceId(namespaceId: string): NamespaceId {
       return { type: "statechart" };
     }
     return { type: "main" };
-  } else if (parts.length === 5 && parts[0] === "machine") {
+  } else if (parts.length === 6 && parts[0] === "" && parts[1] === "machine" && parts[5] === "statechart") {
+    // /machine/0/0/0/statechart
+    const vendor = parseInt(parts[2]);
+    const machine = parseInt(parts[3]);
+    const serial = parseInt(parts[4]);
+    if (isNaN(vendor) || isNaN(serial) || isNaN(machine)) {
+      throw new Error("Invalid namespaceId");
+    }
+    return {
+      type: "machine-statechart",
+      machine_identification_unique: {
+        machine_identification: {
+          vendor,
+          machine,
+        },
+        serial,
+      },
+    };
+  } else if (parts.length === 5 && parts[0] === "" && parts[1] === "machine") {
     // /machine/0/0/0
-    const vendor = parseInt(parts[1]);
-    const machine = parseInt(parts[2]);
-    const serial = parseInt(parts[3]);
+    const vendor = parseInt(parts[2]);
+    const machine = parseInt(parts[3]);
+    const serial = parseInt(parts[4]);
     if (isNaN(vendor) || isNaN(serial) || isNaN(machine)) {
       throw new Error("Invalid namespaceId");
     }
@@ -285,6 +309,9 @@ export const useSocketioStore = create<SocketioStore>()((set, get) => ({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   initNamespace: <S>(namespaceId, createStore, createEventHandler) => {
     const namespace_path = serializeNamespaceId(namespaceId);
+    console.log("[socketioStore] initNamespace called with:");
+    console.log("  - namespaceId:", JSON.stringify(namespaceId, null, 2));
+    console.log("  - namespace_path:", namespace_path);
 
     // check if the namespace already exists
     if (get().hasNamespace(namespaceId)) {
@@ -354,19 +381,21 @@ export const useSocketioStore = create<SocketioStore>()((set, get) => ({
       const intervalId = setInterval(() => {
         const mainState = mainNamespaceStore.getState();
         const machineExists =
-          namespaceId.type === "machine" &&
+          (namespaceId.type === "machine" || namespaceId.type === "machine-statechart") &&
           mainState.machines?.data?.machines.some(
             (m) =>
               m.machine_identification_unique.serial ===
               namespaceId.machine_identification_unique.serial,
           );
-        //console.log(machineExists);
+        console.log(`[socketioStore] Checking machine existence for ${namespace_path}:`, machineExists, "connected:", socket.connected);
         if (machineExists && !socket.connected) {
+          console.log(`[socketioStore] Connecting to ${namespace_path}`);
           socket.connect();
           clearInterval(intervalId); // stop polling
         }
       }, 500);
     } else {
+      console.log(`[socketioStore] Connecting immediately to ${namespace_path}`);
       socket.connect();
     }
   },
