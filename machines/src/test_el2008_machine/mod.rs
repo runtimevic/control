@@ -154,23 +154,20 @@ impl TestEL2008Machine {
         self.namespace.emit(TestEL2008MachineEvents::State(event));
     }
 
-    /// Set the state of a specific LED (only in manual mode and running)
+    /// Set the state of a specific LED
+    /// Can be controlled from any mode (Manual, Home, Automatic) or from statechart
     pub fn set_led(&mut self, index: usize, on: bool) {
-        if self.mode == TestEL2008Mode::Manual 
-            && self.machine_state == MachineState::Running 
-            && index < self.led_on.len() 
-        {
+        if index < self.led_on.len() {
             self.led_on[index] = on;
             self.emit_state();
         }
     }
 
-    /// Set all LEDs at once (only in manual mode and running)
+    /// Set all LEDs at once
+    /// Can be controlled from any mode (Manual, Home, Automatic) or from statechart
     pub fn set_all_leds(&mut self, on: bool) {
-        if self.mode == TestEL2008Mode::Manual && self.machine_state == MachineState::Running {
-            self.led_on = [on; 8];
-            self.emit_state();
-        }
+        self.led_on = [on; 8];
+        self.emit_state();
     }
 
     /// Start the machine based on current mode
